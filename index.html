@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Favorites Store Demo</title>
+    <!-- 
+        EXTERNAL STYLESHEET: Separation of concerns
+        - HTML handles structure and content
+        - CSS handles presentation and styling
+        - JavaScript handles behavior and interactivity
+    -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- 
+        MAIN CONTAINER: Wraps all content for consistent styling
+        The 'container' class provides consistent spacing and centering
+    -->
+    <div class="container">
+        <!-- HEADER SECTION: Introduction and explanation -->
+        <h1>Favorites Store Demo</h1>
+        <p>This demo showcases the favorites store implementation using closure pattern with observer pattern.</p>
+        
+        <!-- 
+            INTERACTIVE SECTION: User input controls
+            This section allows users to manually add/remove favorites
+            and see how the observer pattern responds to state changes
+        -->
+        <div class="demo-section">
+            <h2>Add/Remove Favorites</h2>
+            
+            <!-- 
+                URL INPUT: Main input field for user actions
+                - Pre-filled with GitHub URL as example
+                - Uses HTML5 'url' type for basic validation
+                - JavaScript functions read from this field
+            -->
+            <input type="url" id="urlInput" class="url-input" 
+                   placeholder="Enter a URL (e.g., https://example.com)" 
+                   value="https://github.com">
+            
+            <!-- 
+                ACTION BUTTONS: Each button triggers different store operations
+                - onclick handlers call JavaScript functions
+                - Functions update the store
+                - Store notifies observers
+                - UI updates automatically
+            -->
+            <button class="add-btn" onclick="addFavorite()">Add to Favorites</button>
+            <button class="remove-btn" onclick="removeFavorite()">Remove from Favorites</button>
+            <button class="clear-btn" onclick="clearAll()">Clear All</button>
+            
+            <!-- 
+                COMMAND PATTERN CONTROLS: Undo/Redo functionality
+                These buttons demonstrate the Command Pattern in action
+                - Undo reverses the last action
+                - Redo re-executes the last undone action
+                - Buttons are enabled/disabled based on history availability
+            -->
+            <button class="undo-btn" id="undoBtn" onclick="undoAction()" disabled>↶ Undo</button>
+            <button class="redo-btn" id="redoBtn" onclick="redoAction()" disabled>↷ Redo</button>
+            
+            <!-- 
+                STATUS DISPLAY: Shows feedback to user
+                - Success messages appear in green
+                - Error messages appear in red  
+                - Messages auto-hide after 3 seconds
+                - Controlled by showStatus() function
+            -->
+            <div id="status" class="status"></div>
+        </div>
+
+        <!-- 
+            COMMAND PATTERN DEMONSTRATION SECTION
+            Shows the action history and undo/redo capabilities
+        -->
+        <div class="demo-section">
+            <h2>Action History (Command Pattern)</h2>
+            <p>This section demonstrates the Command Pattern with undo/redo functionality:</p>
+            <div id="action-history" class="action-history">
+                <em>No actions performed yet</em>
+            </div>
+        </div>
+
+        <!-- 
+            OBSERVER PATTERN DEMONSTRATION SECTIONS
+            Each section below demonstrates a different UI component that
+            automatically updates when the favorites store state changes.
+            This is the Observer Pattern in action!
+        -->
+
+        <!-- 
+            ALL RESOURCES COMPONENT
+            - Shows all available resources
+            - Star buttons indicate favorite status
+            - Clicking stars toggles favorite status
+            - Updates automatically via observer pattern
+        -->
+        <div class="demo-section">
+            <div id="resource-list"></div>
+        </div>
+
+        <!-- 
+            FAVORITES ONLY COMPONENT  
+            - Shows only favorited resources
+            - Filters the same data as above
+            - Independent observer that reacts to same store
+            - Demonstrates multiple views of same data
+        -->
+        <div class="demo-section">
+            <div id="favorites-list"></div>
+        </div>
+
+        <!-- 
+            FREQUENTLY VISITED COMPONENT
+            - Shows a different dataset (frequently visited)
+            - Still shows favorite status for each item
+            - Another independent observer
+            - Demonstrates flexibility of observer pattern
+        -->
+        <div class="demo-section">
+            <div id="frequent-list"></div>
+        </div>
+
+        <!-- 
+            DEBUGGING AND LEARNING SECTION
+            - Real-time log of observer pattern activity
+            - Shows when and how often observers are notified
+            - Timestamped entries for understanding sequence
+            - Essential for learning how the patterns work
+        -->
+        <div class="demo-section">
+            <h2>Observer Pattern Logs</h2>
+            <div id="logs" class="logs"></div>
+        </div>
+    </div>
+
+    <!-- 
+        JAVASCRIPT MODULES: Separation of concerns in action
+        
+        1. favorites-store-modular.js: Core orchestrator with modular architecture
+           - Implements Closure Pattern for private state
+           - Implements Observer Pattern for notifications
+           - Provides clean API for state management
+           
+        2. demo.js: UI logic and user interactions
+           - Observer functions that update UI
+           - Event handlers for user actions
+           - Demo-specific functionality
+           
+        This separation makes the code:
+        - More maintainable (changes to UI don't affect store)
+        - More testable (can test store logic independently)
+        - More reusable (store can be used in different UIs)
+        - More scalable (easy to add new UI components)
+    -->
+    
+    <!-- 
+        MODERN MODULE LOADING: Using ES6 modules for better encapsulation
+        - type="module" enables ES6 import/export syntax
+        - Provides better dependency management
+        - Enables tree-shaking in production builds
+        - More explicit dependency declarations
+    -->
+    <script type="module" src="src/demo.js"></script>
+</body>
+</html>

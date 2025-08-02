@@ -1,0 +1,343 @@
+/* 
+=============================================================================
+FAVORITES STORE DEMO - STYLESHEET
+=============================================================================
+
+This CSS file demonstrates:
+- Clean, maintainable styling practices
+- Responsive design principles
+- Visual feedback for user interactions
+- Component-based styling approach
+
+The styles support the demo's educational goals by:
+- Making interactive elements clearly identifiable
+- Providing visual feedback for different states
+- Creating a clean, professional appearance
+- Supporting the functionality without overwhelming it
+*/
+
+/* =============================================================================
+   GLOBAL STYLES AND LAYOUT
+   ============================================================================= */
+
+/* 
+BODY STYLES: Overall page appearance and layout
+- Arial font for clean, readable text
+- Centered layout with max-width for readability
+- Light background to make content stand out
+- Consistent padding for breathing room
+*/
+body {
+    font-family: Arial, sans-serif;
+    max-width: 800px;        /* Prevents lines from getting too long */
+    margin: 0 auto;          /* Centers the content horizontally */
+    padding: 20px;           /* Space around the edges */
+    background-color: #f5f5f5; /* Light gray background */
+}
+
+/* 
+MAIN CONTAINER: White content area
+- Creates a "card" effect with shadow
+- Provides consistent inner spacing
+- Distinguishes content from background
+*/
+.container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;           /* Rounded corners */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow */
+}
+
+/* =============================================================================
+   COMPONENT LAYOUT
+   ============================================================================= */
+
+/* 
+DEMO SECTIONS: Individual component containers
+- Each section represents a different UI component
+- Consistent spacing between sections
+- Visual boundaries to separate concerns
+- Reflects the modular architecture of the JavaScript
+*/
+.demo-section {
+    margin: 20px 0;           /* Vertical spacing between sections */
+    padding: 15px;            /* Inner spacing */
+    border: 1px solid #ddd;   /* Subtle border */
+    border-radius: 4px;       /* Slightly rounded corners */
+}
+
+/* =============================================================================
+   FORM CONTROLS AND INPUTS
+   ============================================================================= */
+
+/* 
+URL INPUT FIELD: Main text input styling
+- Large enough for URLs
+- Consistent padding for comfortable interaction
+- Right margin to separate from buttons
+*/
+.url-input {
+    padding: 8px;
+    width: 300px;
+    margin-right: 10px;
+}
+
+/* 
+BUTTON BASE STYLES: Common button appearance
+- Consistent padding across all buttons
+- No default browser borders
+- Rounded corners for modern look
+- Pointer cursor indicates interactivity
+*/
+button {
+    padding: 8px 16px;
+    margin: 5px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;         /* Shows it's clickable */
+}
+
+/* =============================================================================
+   BUTTON VARIATIONS - SEMANTIC COLORS
+   ============================================================================= */
+
+/* Each button type has a distinct color to indicate its function */
+
+/* ADD BUTTON: Green indicates "positive" or "add" action */
+.add-btn { 
+    background-color: #4CAF50; 
+    color: white; 
+}
+
+/* REMOVE BUTTON: Red indicates "destructive" or "remove" action */
+.remove-btn { 
+    background-color: #f44336; 
+    color: white; 
+}
+
+/* CLEAR BUTTON: Orange indicates "caution" or "bulk action" */
+.clear-btn { 
+    background-color: #ff9800; 
+    color: white; 
+}
+
+/* UNDO BUTTON: Blue indicates "navigation" or "reversible action" */
+.undo-btn {
+    background-color: #2196F3;
+    color: white;
+}
+
+/* UNDO BUTTON DISABLED: Grayed out when no actions to undo */
+.undo-btn:disabled {
+    background-color: #ccc;
+    color: #666;
+    cursor: not-allowed;
+}
+
+/* REDO BUTTON: Purple indicates "forward navigation" */
+.redo-btn {
+    background-color: #9C27B0;
+    color: white;
+}
+
+/* REDO BUTTON DISABLED: Grayed out when no actions to redo */
+.redo-btn:disabled {
+    background-color: #ccc;
+    color: #666;
+    cursor: not-allowed;
+}
+
+/* =============================================================================
+   FAVORITES DISPLAY COMPONENTS
+   ============================================================================= */
+
+/* 
+FAVORITES LIST CONTAINER: Special styling for favorites display
+- Distinct background to highlight this section
+- Consistent spacing and rounded corners
+*/
+.favorites-list {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #f9f9f9;  /* Light gray background */
+    border-radius: 4px;
+}
+
+/* 
+FAVORITE ITEM: Individual favorite display
+- Flexbox layout for consistent alignment
+- Bottom border separates items
+- Padding for comfortable reading
+*/
+.favorite-item {
+    display: flex;
+    justify-content: space-between; /* Spreads content to edges */
+    align-items: center;            /* Vertical centering */
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+}
+
+/* =============================================================================
+   STATUS AND FEEDBACK SYSTEM
+   ============================================================================= */
+
+/* 
+STATUS MESSAGE BASE: Common styling for all status messages
+- Consistent spacing and appearance
+- Rounded corners for modern look
+*/
+.status {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+/* SUCCESS MESSAGES: Green background for positive feedback */
+.status.positive { 
+    background-color: #d4edda;  /* Light green background */
+    color: #155724;             /* Dark green text */
+}
+
+/* ERROR MESSAGES: Red background for negative feedback */
+.status.negative { 
+    background-color: #f8d7da;  /* Light red background */
+    color: #721c24;             /* Dark red text */
+}
+
+/* =============================================================================
+   LOGGING AND DEBUGGING INTERFACE
+   ============================================================================= */
+
+/* 
+LOGS CONTAINER: Special styling for debug output
+- Monospace font for technical information
+- Scrollable area to handle lots of output
+- Distinct background to separate from main content
+*/
+.logs {
+    background-color: #f8f9fa;    /* Very light gray */
+    border: 1px solid #dee2e6;    /* Subtle border */
+    border-radius: 4px;
+    padding: 10px;
+    font-family: monospace;       /* Fixed-width font for logs */
+    font-size: 12px;             /* Smaller text for dense info */
+    max-height: 200px;           /* Limit height */
+    overflow-y: auto;            /* Scroll when content exceeds height */
+}
+
+/* 
+ACTION HISTORY CONTAINER: Display for command pattern history
+- Similar to logs but for action tracking
+- Shows undo/redo capabilities
+- Visual representation of command pattern
+*/
+.action-history {
+    background-color: #f0f8ff;    /* Light blue background */
+    border: 1px solid #b3d9ff;    /* Blue border */
+    border-radius: 4px;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 12px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+/* 
+ACTION HISTORY ITEM: Individual action in the history
+- Distinct styling for current position
+- Visual indicators for action types
+*/
+.action-history-item {
+    padding: 2px 4px;
+    margin: 1px 0;
+    border-radius: 2px;
+}
+
+/* CURRENT ACTION: Highlight the current position in history */
+.action-history-item.current {
+    background-color: #ffeb3b;    /* Yellow highlight */
+    font-weight: bold;
+}
+
+/* UNDONE ACTION: Show actions that have been undone */
+.action-history-item.undone {
+    color: #999;                  /* Gray text for undone actions */
+    text-decoration: line-through;
+}
+
+/* =============================================================================
+   RESOURCE LIST ITEMS
+   ============================================================================= */
+
+/* 
+RESOURCE ITEM: Individual resource display in lists
+- Flexbox layout for consistent structure
+- Bottom borders separate items
+- Hover effects could be added here
+*/
+.resource-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+/* Remove border from last item to avoid double border */
+.resource-item:last-child {
+    border-bottom: none;
+}
+
+/* =============================================================================
+   FAVORITE STATUS INDICATORS
+   ============================================================================= */
+
+/* 
+FAVORITED STATE: Gold star button for favorited items
+- Bright gold color indicates "favorite" status
+- Dark text for contrast and readability
+- Larger font size makes stars more prominent
+*/
+.favorited {
+    background-color: #ffd700;  /* Gold background */
+    color: #333;                /* Dark text */
+    font-size: 16px;
+}
+
+/* 
+NOT FAVORITED STATE: Gray button for non-favorited items
+- Muted colors indicate "inactive" state
+- Still clearly clickable and interactive
+- Provides clear visual distinction from favorited items
+*/
+.not-favorited {
+    background-color: #e0e0e0;  /* Light gray background */
+    color: #666;                /* Gray text */
+    font-size: 16px;
+}
+
+/* =============================================================================
+   LIST STYLING
+   ============================================================================= */
+
+/* 
+LISTS: Clean list appearance
+- Remove default bullet points for custom styling
+- Remove default padding/margins for consistent spacing
+- Let container elements handle spacing instead
+*/
+ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* 
+HEADINGS: Consistent heading appearance
+- Remove default top margin to control spacing
+- Consistent color throughout the application
+*/
+h2 {
+    margin-top: 0;
+    color: #333;
+}
