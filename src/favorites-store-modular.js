@@ -31,29 +31,6 @@ import {
   createBulkAddAction 
 } from './actions/action-definitions.js';
 
-// CommonJS imports for Node.js compatibility
-let createStateStoreCommonJS, createObserverManagerCommonJS, createCommandManagerCommonJS;
-let createAddFavoriteActionCommonJS, createRemoveFavoriteActionCommonJS, createClearAllActionCommonJS, createBulkAddActionCommonJS;
-
-if (typeof require !== 'undefined') {
-  try {
-    const stateStore = require('./store/state-store.js');
-    const observerManager = require('./observers/observer-manager.js');
-    const commandManager = require('./commands/command-manager.js');
-    const actions = require('./actions/action-definitions.js');
-    
-    createStateStoreCommonJS = stateStore.createStateStore;
-    createObserverManagerCommonJS = observerManager.createObserverManager;
-    createCommandManagerCommonJS = commandManager.createCommandManager;
-    createAddFavoriteActionCommonJS = actions.createAddFavoriteAction;
-    createRemoveFavoriteActionCommonJS = actions.createRemoveFavoriteAction;
-    createClearAllActionCommonJS = actions.createClearAllAction;
-    createBulkAddActionCommonJS = actions.createBulkAddAction;
-  } catch (e) {
-    // Fallback to ES6 imports if CommonJS fails
-  }
-}
-
 /**
  * Factory function that creates a complete favorites store
  * by orchestrating all the component modules
@@ -65,16 +42,16 @@ export const createFavoritesStore = () => {
   // INITIALIZE COMPONENT MODULES
   // ==========================================================================
   
-  // Use CommonJS imports in Node.js environment, ES6 imports in browser
-  const stateStore = (createStateStoreCommonJS || createStateStore)();
-  const observerManager = (createObserverManagerCommonJS || createObserverManager)();
-  const commandManager = (createCommandManagerCommonJS || createCommandManager)();
+  // Initialize all component modules
+  const stateStore = createStateStore();
+  const observerManager = createObserverManager();
+  const commandManager = createCommandManager();
   
   // Action creators
-  const createAddFavoriteActionFn = createAddFavoriteActionCommonJS || createAddFavoriteAction;
-  const createRemoveFavoriteActionFn = createRemoveFavoriteActionCommonJS || createRemoveFavoriteAction;
-  const createClearAllActionFn = createClearAllActionCommonJS || createClearAllAction;
-  const createBulkAddActionFn = createBulkAddActionCommonJS || createBulkAddAction;
+  const createAddFavoriteActionFn = createAddFavoriteAction;
+  const createRemoveFavoriteActionFn = createRemoveFavoriteAction;
+  const createClearAllActionFn = createClearAllAction;
+  const createBulkAddActionFn = createBulkAddAction;
 
   // ==========================================================================
   // HELPER FUNCTIONS
@@ -334,14 +311,6 @@ export const createFavoritesStore = () => {
  * In larger applications, you might inject this or create multiple instances
  */
 export const favoritesStore = createFavoritesStore();
-
-// CommonJS compatibility for Node.js testing
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    createFavoritesStore,
-    favoritesStore
-  };
-}
 
 // =============================================================================
 // PATTERN DOCUMENTATION

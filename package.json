@@ -2,6 +2,7 @@
   "name": "favorites-store-demo",
   "version": "1.0.0",
   "description": "JavaScript favorites store implementation using closure pattern with observer pattern for state management",
+  "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "npx http-server . -p 3000 -o",

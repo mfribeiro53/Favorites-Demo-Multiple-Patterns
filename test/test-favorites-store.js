@@ -3,8 +3,8 @@
  * Basic tests to validate the store functionality
  */
 
-// For Node.js testing, we'll use the CommonJS exports from the modular store
-const { createFavoritesStore } = require('../src/favorites-store-modular.js');
+// ES6 import for the modular store
+import { createFavoritesStore } from '../src/favorites-store-modular.js';
 
 function runTests() {
     console.log('🧪 Running Modular Favorites Store Tests...\n');

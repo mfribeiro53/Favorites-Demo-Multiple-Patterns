@@ -133,7 +133,4 @@ export const createStateStore = () => {
   };
 };
 
-// CommonJS compatibility
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { createStateStore };
-}
+

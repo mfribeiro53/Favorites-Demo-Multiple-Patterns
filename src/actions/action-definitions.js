@@ -233,14 +233,4 @@ export const getAvailableActionTypes = () => [
   'BULK_ADD'
 ];
 
-// CommonJS compatibility
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    createAddFavoriteAction,
-    createRemoveFavoriteAction,
-    createClearAllAction,
-    createBulkAddAction,
-    createAction,
-    getAvailableActionTypes
-  };
-}
+

@@ -222,7 +222,4 @@ export const createCommandManager = () => {
   };
 };
 
-// CommonJS compatibility
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { createCommandManager };
-}
+

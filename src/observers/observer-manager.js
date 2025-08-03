@@ -131,7 +131,4 @@ export const createObserverManager = () => {
   };
 };
 
-// CommonJS compatibility
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { createObserverManager };
-}
+
