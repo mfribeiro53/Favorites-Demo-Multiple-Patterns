@@ -7,7 +7,10 @@
   "scripts": {
     "start": "npx http-server . -p 3000 -o",
     "dev": "npx http-server . -p 3000 -o -c-1",
-    "test": "node test/test-favorites-store.js"
+    "test": "node test/test-favorites-store.js",
+    "serve": "python3 -m http.server 8080",
+    "title-server": "node server/title-proxy.js",
+    "dev-with-titles": "npm run serve & npm run title-server"
   },
   "keywords": [
     "javascript",

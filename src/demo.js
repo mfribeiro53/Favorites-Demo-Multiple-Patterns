@@ -75,6 +75,157 @@ const frequentlyVisited = [
 // =============================================================================
 
 /**
+ * UTILITY FUNCTION: Fetch page title from a URL
+ * 
+ * @param {string} url - The URL to fetch the title from
+ * @returns {Promise<string>} Promise that resolves to the page title or fallback name
+ * 
+ * Design Principles:
+ * - ASYNCHRONOUS: Uses multiple strategies for title fetching
+ * - ERROR HANDLING: Graceful fallback if fetch fails
+ * - CROSS-ORIGIN AWARE: Handles CORS limitations with alternatives
+ * - PERFORMANCE: Caches results to avoid repeated requests
+ * 
+ * Note: Due to CORS policies, direct fetching from external sites is limited.
+ * This function provides fallbacks for a better user experience.
+ */
+const pageTitleCache = new Map(); // Cache to avoid repeated requests
+
+const fetchPageTitle = async (url) => {
+  // Return cached result if available
+  if (pageTitleCache.has(url)) {
+    return pageTitleCache.get(url);
+  }
+
+  try {
+    // Ensure URL has protocol
+    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+    const urlObj = new URL(fullUrl);
+    
+    // Strategy 1: Try to use a title extraction service (when available)
+    // Check if our title extraction server is running
+    try {
+      const titleServerUrl = `http://localhost:3001/api/page-title?url=${encodeURIComponent(fullUrl)}`;
+      const response = await fetch(titleServerUrl);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.title) {
+          pageTitleCache.set(url, data.title);
+          return data.title;
+        }
+      }
+    } catch (serverError) {
+      // Title server not available, fall back to client-side extraction
+      console.log('Title server not available, using fallback method');
+    }
+    
+    // Strategy 2: Create intelligent display names based on URL structure
+    let displayName = urlObj.hostname;
+    
+    // Remove 'www.' prefix for cleaner display
+    if (displayName.startsWith('www.')) {
+      displayName = displayName.substring(4);
+    }
+    
+    // Capitalize first letter and handle common domains
+    const domainParts = displayName.split('.');
+    if (domainParts.length >= 2) {
+      const mainDomain = domainParts[domainParts.length - 2];
+      
+      // Special handling for well-known domains
+      const knownDomains = {
+        'ups': 'UPS',
+        'fedex': 'FedEx',
+        'github': 'GitHub',
+        'google': 'Google',
+        'youtube': 'YouTube',
+        'wikipedia': 'Wikipedia',
+        'facebook': 'Facebook',
+        'twitter': 'Twitter',
+        'linkedin': 'LinkedIn',
+        'amazon': 'Amazon',
+        'microsoft': 'Microsoft',
+        'apple': 'Apple',
+        'netflix': 'Netflix'
+      };
+      
+      displayName = knownDomains[mainDomain.toLowerCase()] || 
+                   mainDomain.charAt(0).toUpperCase() + mainDomain.slice(1);
+      
+      // Add domain extension context if it's not .com
+      const extension = domainParts[domainParts.length - 1];
+      if (extension !== 'com') {
+        displayName += ` (.${extension})`;
+      }
+    }
+    
+    // Strategy 3: Try iframe approach for same-origin or CORS-enabled sites
+    // This is a fallback that might work for some sites
+    try {
+      const response = await fetch(fullUrl, {
+        method: 'HEAD', // Just check if the site is accessible
+        mode: 'no-cors'
+      });
+      
+      // If we get here without error, the site exists
+      // For demo purposes, we'll enhance the display name
+      if (urlObj.pathname && urlObj.pathname !== '/') {
+        const pathParts = urlObj.pathname.split('/').filter(part => part);
+        if (pathParts.length > 0) {
+          // Add context from URL path
+          let lastPart = pathParts[pathParts.length - 1];
+          
+          // Remove file extensions for cleaner display
+          if (lastPart.includes('.')) {
+            lastPart = lastPart.split('.')[0];
+          }
+          
+          // Skip common home/index page names
+          const skipParts = ['index', 'home', 'default', 'main'];
+          
+          if (lastPart && !skipParts.includes(lastPart.toLowerCase())) {
+            displayName += ` - ${lastPart.charAt(0).toUpperCase() + lastPart.slice(1)}`;
+          }
+        }
+      }
+    } catch (corsError) {
+      // Expected for most external sites - just use our smart domain name
+    }
+    
+    pageTitleCache.set(url, displayName);
+    return displayName;
+    
+  } catch (error) {
+    // Final fallback: use the original URL
+    console.log(`Could not process URL ${url}:`, error.message);
+    const fallbackName = url;
+    pageTitleCache.set(url, fallbackName);
+    return fallbackName;
+  }
+};
+
+/**
+ * UTILITY FUNCTION: Get display name for a resource (with title fetching)
+ * 
+ * @param {string} url - The URL to get display name for
+ * @returns {Promise<Object>} Promise that resolves to resource object with name
+ */
+const createResourceFromUrl = async (url) => {
+  // Check if this URL exists in our predefined resources first
+  const predefinedResource = allResources.find(res => res.url === url);
+  
+  if (predefinedResource) {
+    // Use the predefined resource's display name
+    return predefinedResource;
+  } else {
+    // Fetch the page title for user-added URLs
+    const displayName = await fetchPageTitle(url);
+    return { url: url, name: displayName };
+  }
+};
+
+/**
  * UTILITY FUNCTION: Generate HTML for a single resource item
  * 
  * @param {Object} resource - The resource object {url, name}
@@ -185,33 +336,48 @@ const renderResourceList = (currentFavorites) => {
  * 
  * Observer Pattern Role: This function is an OBSERVER
  * - Independent component that reacts to store changes
- * - Filters data to show only relevant items
+ * - Shows all favorited items with fetched page titles
  * - Handles empty state gracefully
  * 
  * Responsibilities:
- * - Show ONLY favorited resources
+ * - Show ALL favorited resources (predefined + user-added)
+ * - Fetch and display page titles for user-added URLs
  * - Display count in the header
  * - Handle empty state with appropriate message
  * - Provide same interactive controls as main list
  */
-const renderFavoritesList = (currentFavorites) => {
+const renderFavoritesList = async (currentFavorites) => {
   // DOM MANIPULATION: Get the container for favorites display
   const container = document.getElementById('favorites-list');
   
-  // DATA FILTERING: Only show resources that are in the favorites Set
-  // This demonstrates how different components can show different views of the same data
-  const favoriteResources = allResources.filter(res => currentFavorites.has(res.url));
-  
   // CONDITIONAL RENDERING: Different UI for empty vs populated state
-  if (favoriteResources.length === 0) {
+  if (currentFavorites.size === 0) {
     // EMPTY STATE: User-friendly message when no favorites exist
     container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><p><em>No favorites selected</em></p>`;
   } else {
-    // POPULATED STATE: Show the favorited resources
-    // Note: We pass 'true' for isFav since all items in this list are favorites
-    container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><ul>${
-      favoriteResources.map(res => createResourceHtml(res, true)).join('')
-    }</ul>`;
+    // LOADING STATE: Show loading message while processing URLs
+    container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><p><em>Processing URLs...</em></p>`;
+    
+    // POPULATED STATE: Show ALL favorited resources with page titles
+    try {
+      // Convert Set to Array to map over all favorited URLs
+      const favoriteUrlsArray = Array.from(currentFavorites);
+      
+      // Fetch resource objects with titles for all favorites
+      const favoriteResourcesPromises = favoriteUrlsArray.map(url => createResourceFromUrl(url));
+      const favoriteResources = await Promise.all(favoriteResourcesPromises);
+      
+      // Render all favorited resources with their fetched titles
+      // Note: We pass 'true' for isFav since all items in this list are favorites
+      container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><ul>${
+        favoriteResources.map(res => createResourceHtml(res, true)).join('')
+      }</ul>`;
+      
+    } catch (error) {
+      // ERROR HANDLING: Show error message if title fetching fails
+      console.error('Error fetching page titles:', error);
+      container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><p><em>Error loading page titles</em></p>`;
+    }
   }
 };
 
