@@ -49,16 +49,16 @@ export const createCommandManager = () => {
     /**
      * Execute an action and add it to history
      * @param {Object} action - Command object with execute/undo methods
-     * @returns {boolean} True if executed successfully
+     * @returns {Promise<boolean>} True if executed successfully
      */
-    executeAction(action) {
+    async executeAction(action) {
       if (!action || typeof action.execute !== 'function') {
         throw new Error('Action must have an execute method');
       }
       
       try {
-        // Execute the action
-        const result = action.execute();
+        // Execute the action (may be async)
+        const result = await action.execute();
         
         // If execution was successful (or didn't return false)
         if (result !== false) {
@@ -85,9 +85,9 @@ export const createCommandManager = () => {
 
     /**
      * Undo the last executed action
-     * @returns {boolean} True if an action was undone
+     * @returns {Promise<boolean>} True if an action was undone
      */
-    undo() {
+    async undo() {
       if (currentHistoryIndex < 0) {
         return false; // No actions to undo
       }
@@ -99,8 +99,8 @@ export const createCommandManager = () => {
           throw new Error('Action does not support undo');
         }
         
-        // Execute the undo
-        action.undo();
+        // Execute the undo (may be async)
+        await action.undo();
         
         // Move backward in history
         currentHistoryIndex--;
@@ -115,9 +115,9 @@ export const createCommandManager = () => {
 
     /**
      * Redo the next action in history
-     * @returns {boolean} True if an action was redone
+     * @returns {Promise<boolean>} True if an action was redone
      */
-    redo() {
+    async redo() {
       if (currentHistoryIndex >= actionHistory.length - 1) {
         return false; // No actions to redo
       }
@@ -127,8 +127,8 @@ export const createCommandManager = () => {
         currentHistoryIndex++;
         const action = actionHistory[currentHistoryIndex];
         
-        // Re-execute the action
-        action.execute();
+        // Re-execute the action (may be async)
+        await action.execute();
         
         return true;
         

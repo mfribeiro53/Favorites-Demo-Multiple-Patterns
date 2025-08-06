@@ -60,10 +60,10 @@ export const createFavoritesStore = () => {
   /**
    * Execute an action and notify observers
    * @param {Object} action - The action to execute
-   * @returns {boolean} True if executed successfully
+   * @returns {Promise<boolean>} True if executed successfully
    */
-  const executeAndNotify = (action) => {
-    const wasExecuted = commandManager.executeAction(action);
+  const executeAndNotify = async (action) => {
+    const wasExecuted = await commandManager.executeAction(action);
     
     if (wasExecuted) {
       // Notify all observers of the state change
@@ -85,31 +85,31 @@ export const createFavoritesStore = () => {
     /**
      * Add a URL to favorites
      * @param {string} url - The URL to add
-     * @returns {boolean} True if added successfully
+     * @returns {Promise<boolean>} True if added successfully
      */
-    addFavorite(url) {
+    async addFavorite(url) {
       // Early return if already exists (no action needed)
       if (stateStore.has(url)) {
         return false;
       }
       
       const action = createAddFavoriteActionFn(url, stateStore);
-      return executeAndNotify(action);
+      return await executeAndNotify(action);
     },
 
     /**
      * Remove a URL from favorites
      * @param {string} url - The URL to remove
-     * @returns {boolean} True if removed successfully
+     * @returns {Promise<boolean>} True if removed successfully
      */
-    removeFavorite(url) {
+    async removeFavorite(url) {
       // Early return if doesn't exist (no action needed)
       if (!stateStore.has(url)) {
         return false;
       }
       
       const action = createRemoveFavoriteActionFn(url, stateStore);
-      return executeAndNotify(action);
+      return await executeAndNotify(action);
     },
 
     /**
@@ -123,25 +123,25 @@ export const createFavoritesStore = () => {
 
     /**
      * Clear all favorites
-     * @returns {boolean} True if cleared successfully
+     * @returns {Promise<boolean>} True if cleared successfully
      */
-    clearAll() {
+    async clearAll() {
       if (stateStore.isEmpty()) {
         return false; // Nothing to clear
       }
       
       const action = createClearAllActionFn(stateStore);
-      return executeAndNotify(action);
+      return await executeAndNotify(action);
     },
 
     /**
      * Add multiple URLs at once
      * @param {string[]} urls - Array of URLs to add
-     * @returns {boolean} True if any were added
+     * @returns {Promise<boolean>} True if any were added
      */
-    addMultiple(urls) {
+    async addMultiple(urls) {
       const action = createBulkAddActionFn(urls, stateStore);
-      return executeAndNotify(action);
+      return await executeAndNotify(action);
     },
 
     // ========================================================================
@@ -208,10 +208,10 @@ export const createFavoritesStore = () => {
     
     /**
      * Undo the last action
-     * @returns {boolean} True if undone successfully
+     * @returns {Promise<boolean>} True if undone successfully
      */
-    undo() {
-      const wasUndone = commandManager.undo();
+    async undo() {
+      const wasUndone = await commandManager.undo();
       
       if (wasUndone) {
         // Notify observers of the state change
@@ -223,10 +223,10 @@ export const createFavoritesStore = () => {
 
     /**
      * Redo the next action
-     * @returns {boolean} True if redone successfully
+     * @returns {Promise<boolean>} True if redone successfully
      */
-    redo() {
-      const wasRedone = commandManager.redo();
+    async redo() {
+      const wasRedone = await commandManager.redo();
       
       if (wasRedone) {
         // Notify observers of the state change
@@ -266,6 +266,19 @@ export const createFavoritesStore = () => {
      */
     clearHistory(keepCurrent = false) {
       commandManager.clearHistory(keepCurrent);
+    },
+
+    // ========================================================================
+    // INTERNAL ACCESS (FOR INITIALIZATION)
+    // ========================================================================
+    
+    /**
+     * Get direct access to state store for initialization purposes
+     * This should only be used during app startup for syncing from database
+     * @returns {Object} Internal state store
+     */
+    _getStateStore() {
+      return stateStore;
     },
 
     /**

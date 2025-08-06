@@ -11,7 +11,7 @@
  * Design Principles:
  * - ASYNC/AWAIT: All database operations are asynchronous
  * - ERROR HANDLING: Graceful handling of connection and query errors
- * - CONSISTENCY: Returns data in same format as mock arrays
+ * - CONSISTENCY: Returns data in consistent format for application use
  * - CACHING: Optional caching layer for performance
  * - SEPARATION: Database logic isolated from business logic
  */
@@ -118,45 +118,6 @@ class DatabaseService {
   }
   
   /**
-   * Execute a stored procedure via API call
-   * @param {string} procedureName - Name of the stored procedure
-   * @param {Object} parameters - Parameters to pass to the procedure
-   * @returns {Promise<Array>} Query results
-   */
-  async executeStoredProcedure(procedureName, parameters = {}) {
-    try {
-      console.log(`🔍 Executing: ${procedureName}`, parameters);
-      
-      // Try to call via API endpoint first
-      const response = await fetch('http://localhost:3001/api/execute-procedure', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          procedure: procedureName,
-          parameters: parameters
-        })
-      });
-      
-      if (response.ok) {
-        return await response.json();
-      } else {
-        throw new Error(`API call failed: ${response.status}`);
-      }
-      
-    } catch (error) {
-      console.warn(`⚠️ API call failed for ${procedureName}:`, error.message);
-      throw error; // Don't fallback, let the error propagate
-    }
-  }
-  
-  /**
-   * Get fallback data when database is unavailable
-   */
-  async getFallbackData(procedureName, parameters) {
-    // Fallback data removed - application requires database connection
-    throw new Error(`Database required for ${procedureName}. No fallback data available.`);
-  }
-  /**
    * Simulate realistic database response times
    */
   async simulateDelay() {
@@ -213,7 +174,7 @@ export const getAllResources = async (useCache = true) => {
     
   } catch (error) {
     console.error('Failed to get all resources:', error);
-    throw error; // No fallback - require database connection
+    throw error;
   }
 };
 
@@ -254,7 +215,7 @@ export const getFrequentlyVisited = async (topCount = 10, useCache = true) => {
     
   } catch (error) {
     console.error('Failed to get frequently visited:', error);
-    throw error; // No fallback - require database connection
+    throw error;
   }
 };
 
@@ -295,7 +256,7 @@ export const getUserFavorites = async (useCache = false) => {
     
   } catch (error) {
     console.error('Failed to get user favorites:', error);
-    throw error; // No fallback - require database connection
+    throw error;
   }
 };
 
@@ -318,21 +279,29 @@ export const addFavorite = async (url, displayName = null, userNotes = null) => 
       throw new Error(`API call failed: ${response.status}`);
     }
     
-    const result = await response.json();
+    const results = await response.json();
     
-    if (result.success) {
-      // Clear cache so next read gets fresh data
-      userFavoritesCache.clear();
-      console.log(`✅ ${result.message}`);
-      return true;
+    // Handle stored procedure response format
+    if (results && results.length > 0) {
+      const result = results[0];
+      
+      if (result.Success) {
+        // Clear cache so next read gets fresh data
+        userFavoritesCache.clear();
+        console.log(`✅ ${result.Message}`);
+        return true;
+      } else {
+        console.log(`ℹ️ ${result.Message}`);
+        return false;
+      }
     } else {
-      console.log(`ℹ️ ${result.message}`);
+      console.log('ℹ️ Unexpected response format from database');
       return false;
     }
     
   } catch (error) {
     console.error('Failed to add favorite:', error);
-    throw error; // No fallback - require database connection
+    throw error;
   }
 };
 
@@ -353,21 +322,29 @@ export const removeFavorite = async (url) => {
       throw new Error(`API call failed: ${response.status}`);
     }
     
-    const result = await response.json();
+    const results = await response.json();
     
-    if (result.success) {
-      // Clear cache so next read gets fresh data
-      userFavoritesCache.clear();
-      console.log(`✅ ${result.message}`);
-      return true;
+    // Handle stored procedure response format
+    if (results && results.length > 0) {
+      const result = results[0];
+      
+      if (result.Success) {
+        // Clear cache so next read gets fresh data
+        userFavoritesCache.clear();
+        console.log(`✅ ${result.Message}`);
+        return true;
+      } else {
+        console.log(`ℹ️ ${result.Message}`);
+        return false;
+      }
     } else {
-      console.log(`ℹ️ ${result.message}`);
+      console.log('ℹ️ Unexpected response format from database');
       return false;
     }
     
   } catch (error) {
     console.error('Failed to remove favorite:', error);
-    throw error; // No fallback - require database connection
+    throw error;
   }
 };
 
@@ -385,59 +362,29 @@ export const clearAllFavorites = async () => {
       throw new Error(`API call failed: ${response.status}`);
     }
     
-    const result = await response.json();
+    const results = await response.json();
     
-    if (result.success) {
-      // Clear cache so next read gets fresh data
-      userFavoritesCache.clear();
-      console.log(`✅ ${result.message}`);
-      return true;
+    // Handle stored procedure response format
+    if (results && results.length > 0) {
+      const result = results[0];
+      
+      if (result.Success) {
+        // Clear cache so next read gets fresh data
+        userFavoritesCache.clear();
+        console.log(`✅ ${result.Message}`);
+        return true;
+      } else {
+        console.log(`ℹ️ ${result.Message}`);
+        return false;
+      }
     } else {
-      console.log(`ℹ️ ${result.message}`);
+      console.log('ℹ️ Unexpected response format from database');
       return false;
     }
     
   } catch (error) {
     console.error('Failed to clear favorites:', error);
-    throw error; // No fallback - require database connection
-  }
-};
-
-/**
- * Check if a URL is favorited
- * @param {string} url - URL to check
- * @returns {Promise<boolean>} True if favorited
- */
-export const isFavorite = async (url) => {
-  try {
-    const results = await dbService.executeStoredProcedure('FavoritesDemo.sp_IsFavorite', {
-      userId: DB_CONFIG.userId,
-      url
-    });
-    
-    return results[0].isFavorited;
-    
-  } catch (error) {
-    console.error('Failed to check favorite status:', error);
-    throw error; // No fallback - require database connection
-  }
-};
-
-/**
- * Get count of user's favorites
- * @returns {Promise<number>} Number of favorites
- */
-export const getFavoritesCount = async () => {
-  try {
-    const results = await dbService.executeStoredProcedure('FavoritesDemo.sp_GetFavoritesCount', {
-      userId: DB_CONFIG.userId
-    });
-    
-    return results[0].favoritesCount;
-    
-  } catch (error) {
-    console.error('Failed to get favorites count:', error);
-    throw error; // No fallback - require database connection
+    throw error;
   }
 };
 

@@ -41,5 +41,5 @@ export {
  * 
  * // Testing - use specific modules
  * import { createAddFavoriteAction } from './src/index.js';
- * const action = createAddFavoriteAction('test-url', mockStateStore);
+ * const action = createAddFavoriteAction('test-url', stateStore);
  */

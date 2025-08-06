@@ -29,7 +29,6 @@ Navigate to: http://localhost:3001
 ### Database Service Layer
 - `src/database-service.js` - Handles all database communication
 - Calls API endpoints that execute your stored procedures
-- Falls back to mock data if database is unavailable
 - Includes caching for performance
 
 ### API Server
@@ -67,16 +66,6 @@ Your existing code structure remains the same, but now:
 If the API server can't connect to SQL Server:
 - Check that SQL Server is running
 - Verify Windows Authentication is enabled
-- The app will fall back to mock data and still work
-
-## 🔄 Fallback Behavior
-
-The system is designed to be resilient:
-- If API server is down → Uses mock data
-- If database is unavailable → Uses mock data  
-- If stored procedure fails → Logs error and continues
-
-Your Observer and Command patterns work exactly the same regardless of data source!
 
 ## 🏃‍♂️ Run It Now
 

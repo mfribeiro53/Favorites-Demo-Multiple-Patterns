@@ -37,6 +37,7 @@ import {
 } from './database-service.js';
 
 // =============================================================================
+// =============================================================================
 // DATABASE-DRIVEN DATA LOADING
 // =============================================================================
 // Data is loaded directly from the SQL Server database via API calls.
@@ -44,7 +45,6 @@ import {
 // - REST API calls to stored procedures
 // - Connection pooling and error handling  
 // - Real-time data persistence
-// - No fallback data - database connection required
 
 // Global variables to hold dynamically loaded data
 let allResources = [];
@@ -65,13 +65,16 @@ async function loadApplicationData() {
     frequentlyVisited = await getFrequentlyVisited();
     console.log(`✅ Loaded ${frequentlyVisited.length} frequently visited items`);
     
+    // Load and sync favorites from database
+    await syncFavoritesFromDatabase();
+    
     // Trigger initial render with loaded data
     triggerInitialRender();
     
   } catch (error) {
     console.error('💥 Failed to load application data - database required:', error.message);
     
-    // Don't provide fallback data - show error to user
+    // Show error to user
     showStatus('Database connection required - please ensure API server is running', false);
     
     // Set empty arrays 
@@ -80,6 +83,47 @@ async function loadApplicationData() {
     
     // Still trigger render to show empty state
     triggerInitialRender();
+  }
+}
+
+/**
+ * Sync favorites from database to local store
+ */
+async function syncFavoritesFromDatabase() {
+  try {
+    console.log('🔄 Syncing favorites from database...');
+    
+    // Get favorites from database
+    const dbFavorites = await getUserFavorites();
+    console.log(`✅ Loaded ${dbFavorites.length} favorites from database`);
+    
+    // Create a set from database favorites and restore to state
+    if (dbFavorites.length > 0) {
+      const favoritesSet = new Set(dbFavorites);
+      
+      // Access the internal state store directly for initial sync
+      // This avoids triggering database writes during initialization
+      const stateStore = favoritesStore._getStateStore ? favoritesStore._getStateStore() : null;
+      
+      if (stateStore) {
+        stateStore.restore(favoritesSet);
+        console.log(`Synced ${dbFavorites.length} favorites from database to local state`);
+      } else {
+        // Fallback: add them one by one (will trigger database calls but should be idempotent)
+        console.log('Using fallback sync method...');
+        for (const url of dbFavorites) {
+          if (!favoritesStore.isFavorite(url)) {
+            // This will trigger database calls, but since the items are already in DB,
+            // the add operations should return false (already exists) quickly
+            await favoritesStore.addFavorite(url);
+          }
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('Failed to sync favorites from database:', error.message);
+    // Continue anyway - app will work with empty favorites
   }
 }
 
@@ -304,15 +348,15 @@ const createResourceHtml = (resource, isFav) => {
  * 3. Store automatically notifies all observers
  * 4. UI updates reactively
  */
-const toggleFavorite = (url) => {
+const toggleFavorite = async (url) => {
   try {
     // CONDITIONAL LOGIC: Use store to determine current state
     if (favoritesStore.isFavorite(url)) {
       // URL is currently favorited, so remove it
-      favoritesStore.removeFavorite(url);
+      await favoritesStore.removeFavorite(url);
     } else {
       // URL is not favorited, so add it
-      favoritesStore.addFavorite(url);
+      await favoritesStore.addFavorite(url);
     }
     
     // Note: No manual UI updates needed!
@@ -554,7 +598,7 @@ favoritesStore.subscribe((favorites) => {
  * 5. All UI components update reactively
  * 6. Show user feedback
  */
-const addFavorite = () => {
+const addFavorite = async () => {
     // INPUT RETRIEVAL: Get value from the text input and clean it
     const url = document.getElementById('urlInput').value.trim();
     
@@ -571,14 +615,18 @@ const addFavorite = () => {
             return;
         }
         
-        // STORE UPDATE: Add to favorites (this triggers observer notifications)
-        favoritesStore.addFavorite(url);
+        // STORE UPDATE: Add to favorites (this triggers observer notifications and database save)
+        const success = await favoritesStore.addFavorite(url);
         
-        // USER FEEDBACK: Show success message
-        showStatus(`Added "${url}" to favorites`, true);
-        
-        // UI CLEANUP: Clear the input field for next entry
-        document.getElementById('urlInput').value = '';
+        if (success) {
+            // USER FEEDBACK: Show success message
+            showStatus(`Added "${url}" to favorites`, true);
+            
+            // UI CLEANUP: Clear the input field for next entry
+            document.getElementById('urlInput').value = '';
+        } else {
+            showStatus('Failed to add favorite', false);
+        }
         
         // Note: No manual UI updates needed!
         // The observer pattern handles all UI updates automatically
@@ -599,7 +647,7 @@ const addFavorite = () => {
  * 4. Observer pattern handles UI updates
  * 5. Provide user feedback
  */
-const removeFavorite = () => {
+const removeFavorite = async () => {
     // INPUT RETRIEVAL AND VALIDATION: Same pattern as addFavorite
     const url = document.getElementById('urlInput').value.trim();
     if (!url) {
@@ -614,14 +662,18 @@ const removeFavorite = () => {
             return;
         }
         
-        // STORE UPDATE: Remove from favorites (triggers observer notifications)
-        favoritesStore.removeFavorite(url);
+        // STORE UPDATE: Remove from favorites (triggers observer notifications and database removal)
+        const success = await favoritesStore.removeFavorite(url);
         
-        // USER FEEDBACK: Confirm the removal
-        showStatus(`Removed "${url}" from favorites`, true);
-        
-        // UI CLEANUP: Clear input for next action
-        document.getElementById('urlInput').value = '';
+        if (success) {
+            // USER FEEDBACK: Confirm the removal
+            showStatus(`Removed "${url}" from favorites`, true);
+            
+            // UI CLEANUP: Clear input for next action
+            document.getElementById('urlInput').value = '';
+        } else {
+            showStatus('Failed to remove favorite', false);
+        }
         
     } catch (error) {
         // ERROR HANDLING: Graceful error display
@@ -637,7 +689,7 @@ const removeFavorite = () => {
  * - Single observer notification for bulk change
  * - User confirmation through feedback
  */
-const clearAll = () => {
+const clearAll = async () => {
     try {
         // EMPTY STATE CHECK: Provide helpful feedback if nothing to clear
         if (favoritesStore.getCount() === 0) {
@@ -647,11 +699,15 @@ const clearAll = () => {
         
         // BULK OPERATION: Clear all favorites at once
         // This is more efficient than calling removeFavorite() multiple times
-        // The store sends ONE notification instead of many
-        favoritesStore.clearAll();
+        // The store sends ONE notification instead of many and clears database
+        const success = await favoritesStore.clearAll();
         
-        // USER FEEDBACK: Confirm the bulk operation
-        showStatus('Cleared all favorites', true);
+        if (success) {
+            // USER FEEDBACK: Confirm the bulk operation
+            showStatus('Cleared all favorites', true);
+        } else {
+            showStatus('Failed to clear favorites', false);
+        }
         
     } catch (error) {
         // ERROR HANDLING: Show any errors that occur
@@ -748,9 +804,9 @@ window.redoAction = redoAction;
  * - Reversible operations
  * - User feedback for undo operations
  */
-const undoAction = () => {
+const undoAction = async () => {
     try {
-        const wasUndone = favoritesStore.undo();
+        const wasUndone = await favoritesStore.undo();
         
         if (wasUndone) {
             showStatus('Action undone', true);
@@ -771,9 +827,9 @@ const undoAction = () => {
  * - Re-executing previous operations
  * - User feedback for redo operations
  */
-const redoAction = () => {
+const redoAction = async () => {
     try {
-        const wasRedone = favoritesStore.redo();
+        const wasRedone = await favoritesStore.redo();
         
         if (wasRedone) {
             showStatus('Action redone', true);

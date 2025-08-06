@@ -2,7 +2,7 @@
 -- FAVORITES DEMO APPLICATION - COMPLETE CRUD STORED PROCEDURES
 -- =====================================================================================
 -- Schema: FavoritesDemo
--- Purpose: Replace mock data arrays with database persistence
+-- Purpose: Provide database persistence for favorites application
 -- Run this file in SQL Server Management Studio or Azure Data Studio
 -- =====================================================================================
 
