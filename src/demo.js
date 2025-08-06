@@ -29,46 +29,73 @@
 // This demonstrates how clean module separation improves dependency management
 import { favoritesStore } from './favorites-store-modular.js';
 
+// Import database service for real data persistence
+import { 
+  getAllResources, 
+  getFrequentlyVisited, 
+  getUserFavorites 
+} from './database-service.js';
+
 // =============================================================================
-// MOCK DATA - SIMULATING A REAL APPLICATION
+// DATABASE-DRIVEN DATA LOADING
 // =============================================================================
-// In a real application, this data might come from:
-// - REST API calls
-// - GraphQL queries
-// - Local storage
-// - Database queries
-// For the demo, we use static data to focus on the patterns
+// Data is loaded directly from the SQL Server database via API calls.
+// The database service handles:
+// - REST API calls to stored procedures
+// - Connection pooling and error handling  
+// - Real-time data persistence
+// - No fallback data - database connection required
+
+// Global variables to hold dynamically loaded data
+let allResources = [];
+let frequentlyVisited = [];
 
 /**
- * MOCK DATA: Complete list of all available resources
- * 
- * In a real app, this might be fetched from an API endpoint like:
- * GET /api/resources
- * 
- * Each resource has:
- * - url: Unique identifier (could be full URL or just domain)
- * - name: Human-readable display name
+ * Load data from database on application startup
  */
-const allResources = [
-  { url: 'google.com', name: 'Google' },
-  { url: 'youtube.com', name: 'YouTube' },
-  { url: 'wikipedia.org', name: 'Wikipedia' },
-  { url: 'github.com', name: 'GitHub' },
-];
+async function loadApplicationData() {
+  try {
+    console.log('🔄 Loading application data from database...');
+    
+    // Load all resources from database
+    allResources = await getAllResources();
+    console.log(`✅ Loaded ${allResources.length} resources`);
+    
+    // Load frequently visited from database
+    frequentlyVisited = await getFrequentlyVisited();
+    console.log(`✅ Loaded ${frequentlyVisited.length} frequently visited items`);
+    
+    // Trigger initial render with loaded data
+    triggerInitialRender();
+    
+  } catch (error) {
+    console.error('💥 Failed to load application data - database required:', error.message);
+    
+    // Don't provide fallback data - show error to user
+    showStatus('Database connection required - please ensure API server is running', false);
+    
+    // Set empty arrays 
+    allResources = [];
+    frequentlyVisited = [];
+    
+    // Still trigger render to show empty state
+    triggerInitialRender();
+  }
+}
 
 /**
- * MOCK DATA: Frequently visited resources (subset of allResources)
- * 
- * In a real app, this might come from:
- * - User analytics data
- * - Visit frequency tracking
- * - Recommendation algorithms
- * - User behavior analysis
+ * Trigger initial render of all components
  */
-const frequentlyVisited = [
-  { url: 'github.com', name: 'GitHub' },
-  { url: 'google.com', name: 'Google' },
-];
+function triggerInitialRender() {
+  // Get current favorites from store and trigger render
+  const currentFavorites = favoritesStore.getAllFavorites();
+  const favoritesSet = new Set(currentFavorites);
+  
+  // Manually trigger all observer functions with current state
+  renderResourceList(favoritesSet);
+  renderFavoritesList(favoritesSet);
+  renderFrequentlyVisitedList(favoritesSet);
+}
 
 // =============================================================================
 // UTILITY FUNCTIONS - REUSABLE UI HELPERS
@@ -212,16 +239,22 @@ const fetchPageTitle = async (url) => {
  * @returns {Promise<Object>} Promise that resolves to resource object with name
  */
 const createResourceFromUrl = async (url) => {
+  // Ensure URL has proper protocol for consistency
+  const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+  
   // Check if this URL exists in our predefined resources first
-  const predefinedResource = allResources.find(res => res.url === url);
+  const predefinedResource = allResources.find(res => 
+    res.url === normalizedUrl || res.url === url || 
+    res.url.replace(/^https?:\/\//, '') === url.replace(/^https?:\/\//, '')
+  );
   
   if (predefinedResource) {
-    // Use the predefined resource's display name
-    return predefinedResource;
+    // Use the predefined resource's display name but with normalized URL
+    return { url: normalizedUrl, name: predefinedResource.name };
   } else {
     // Fetch the page title for user-added URLs
-    const displayName = await fetchPageTitle(url);
-    return { url: url, name: displayName };
+    const displayName = await fetchPageTitle(normalizedUrl);
+    return { url: normalizedUrl, name: displayName };
   }
 };
 
@@ -670,15 +703,25 @@ const showStatus = (message, isPositive) => {
  * These logs help developers understand the application lifecycle:
  * 1. Store is created and initialized
  * 2. All observers are subscribed
- * 3. Demo UI is ready for interaction
+ * 3. Data is loaded from database
+ * 4. Demo UI is ready for interaction
  * 
  * The fact that we see these logs confirms that:
  * - The store was created successfully
  * - The observer subscriptions worked
+ * - The database integration is functioning
  * - The logging system is functioning
  */
 log('Favorites store initialized');
-log('Demo UI loaded and ready');
+log('Loading data from database...');
+
+// Load application data from database
+loadApplicationData().then(() => {
+  log('Demo UI loaded and ready');
+}).catch(error => {
+  log('Demo UI loaded but database connection failed');
+  console.error('Database error:', error.message);
+});
 
 // =============================================================================
 // GLOBAL FUNCTION EXPOSURE FOR HTML ONCLICK HANDLERS

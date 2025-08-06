@@ -10,7 +10,10 @@
     "test": "node test/test-favorites-store.js",
     "serve": "python3 -m http.server 8080",
     "title-server": "node server/title-proxy.js",
-    "dev-with-titles": "npm run serve & npm run title-server"
+    "dev-with-titles": "npm run serve & npm run title-server",
+    "api-server": "node server/api-server.js",
+    "dev-full": "npm run api-server",
+    "install-deps": "npm install express mssql cors"
   },
   "keywords": [
     "javascript",
@@ -23,5 +26,10 @@
   "license": "MIT",
   "devDependencies": {
     "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "mssql": "^11.0.1"
   }
 }
