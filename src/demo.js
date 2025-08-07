@@ -169,11 +169,10 @@ const fetchPageTitle = async (url) => {
   try {
     // Ensure URL has protocol
   const fullUrl = normalizeUrlUtil(url);
-    const urlObj = new URL(fullUrl);
     
     // Strategy 1: Try to use a title extraction service (when available)
     // Add timeout and a single retry for robustness
-    const fetchWithTimeout = (resource, opts = {}, ms = 2500) => {
+    const fetchWithTimeout = (resource, opts = {}, ms = 4500) => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), ms);
       return fetch(resource, { ...opts, signal: controller.signal })
@@ -181,9 +180,9 @@ const fetchPageTitle = async (url) => {
     };
 
     const tryTitleServer = async () => {
-      const titleServerUrl = `http://localhost:3001/api/page-title?url=${encodeURIComponent(fullUrl)}`;
+      const titleServerUrl = `http://localhost:3002/api/page-title?url=${encodeURIComponent(fullUrl)}`;
       try {
-        const response = await fetchWithTimeout(titleServerUrl, {}, 2500);
+        const response = await fetchWithTimeout(titleServerUrl, {}, 4500);
         if (response.ok) {
           const data = await response.json();
           if (data.title) {
@@ -316,8 +315,9 @@ const createResourceHtml = (resource, isFav) => {
   
   // SEMANTIC HTML: Proper list item structure with meaningful content
   // All displayed text is escaped to prevent injection.
+  const showUrl = safeName !== safeUrl;
   return `<li class="resource-item">
-    <span>${safeName} (${safeUrl})</span>
+    <span>${safeName}${showUrl ? ` (${safeUrl})` : ''}</span>
     ${starButton}
   </li>`;
 };

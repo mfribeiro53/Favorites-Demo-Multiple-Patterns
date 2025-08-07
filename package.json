@@ -10,9 +10,10 @@
   "test": "node test/test-favorites-store.js && node test/test-utils.js",
     "serve": "python3 -m http.server 8080",
     "title-server": "node server/title-proxy.js",
-    "dev-with-titles": "npm run serve & npm run title-server",
+  "dev-with-titles": "npm run serve & npm run title-server",
     "api-server": "node server/api-server.js",
-    "dev-full": "npm run api-server",
+  "servers": "npm run api-server & npm run title-server",
+  "dev-full": "npm run api-server & npm run title-server & npm run dev",
     "install-deps": "npm install express mssql cors"
   },
   "keywords": [

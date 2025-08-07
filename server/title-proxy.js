@@ -23,15 +23,79 @@ import http from 'http';
 import https from 'https';
 import { URL } from 'url';
 
+// Simple in-memory cache with TTL (milliseconds)
+const cache = new Map(); // key: url, value: { title, expiresAt }
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Default port moved to 3002 to avoid conflict with API server (3001)
+const PORT = process.env.TITLE_PROXY_PORT || process.env.PORT || 3002;
+
+function getCachedTitle(url) {
+  const entry = cache.get(url);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    cache.delete(url);
+    return null;
+  }
+  return entry.title;
+}
+
+function setCachedTitle(url, title) {
+  cache.set(url, { title, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
 /**
  * Extract title from HTML content
  * @param {string} html - The HTML content
  * @returns {string|null} The extracted title or null
  */
+function decodeHtmlEntities(str) {
+  if (!str) return str;
+  const map = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&#96;': '`'
+  };
+  return String(str)
+    .replace(/&#(x?[0-9A-Fa-f]+);/g, (_, code) => {
+      try {
+        if (code.startsWith('x') || code.startsWith('X')) {
+          return String.fromCharCode(parseInt(code.slice(1), 16));
+        }
+        return String.fromCharCode(parseInt(code, 10));
+      } catch {
+        return _;
+      }
+    })
+    .replace(/&(amp|lt|gt|quot|#39|#96);/g, (m) => map[m] || m);
+}
+
 function extractTitle(html) {
-  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  if (!html) return null;
+  // Primary: <title> ... </title>
+  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (titleMatch && titleMatch[1]) {
-    return titleMatch[1].trim().replace(/\s+/g, ' '); // Clean up whitespace
+    const t = titleMatch[1].replace(/\s+/g, ' ').trim();
+    return decodeHtmlEntities(t);
+  }
+  // Fallback: Open Graph
+  const ogMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]*>/i);
+  if (ogMatch) {
+    const contentMatch = ogMatch[0].match(/content=["']([^"']+)["']/i);
+    if (contentMatch && contentMatch[1]) {
+      return decodeHtmlEntities(contentMatch[1].trim());
+    }
+  }
+  // Fallback: Twitter
+  const twMatch = html.match(/<meta[^>]+name=["']twitter:title["'][^>]*>/i);
+  if (twMatch) {
+    const contentMatch = twMatch[0].match(/content=["']([^"']+)["']/i);
+    if (contentMatch && contentMatch[1]) {
+      return decodeHtmlEntities(contentMatch[1].trim());
+    }
   }
   return null;
 }
@@ -41,62 +105,117 @@ function extractTitle(html) {
  * @param {string} targetUrl - The URL to fetch
  * @returns {Promise<string>} Promise that resolves to title
  */
-function fetchPageTitle(targetUrl) {
+function fetchPageTitle(targetUrl, maxRedirects = 3) {
+  const cached = getCachedTitle(targetUrl);
+  if (cached) return Promise.resolve(cached);
+
   return new Promise((resolve, reject) => {
+    let resolved = false;
     const urlObj = new URL(targetUrl);
     const client = urlObj.protocol === 'https:' ? https : http;
-    
+
     const options = {
       hostname: urlObj.hostname,
       port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
       path: urlObj.pathname + urlObj.search,
       method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; TitleExtractor/1.0)',
+        'User-Agent': 'Mozilla/5.0 (compatible; TitleExtractor/1.1)',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'identity', // Don't compress for simplicity
+        'Accept-Encoding': 'identity',
         'DNT': '1',
         'Connection': 'close'
       },
-      timeout: 10000 // 10 second timeout
+      timeout: 12000 // 12 second timeout
     };
 
     const req = client.request(options, (res) => {
-      let data = '';
-      
-      // Only process HTML content
-      const contentType = res.headers['content-type'] || '';
-      if (!contentType.includes('text/html')) {
-        reject(new Error('Not an HTML page'));
+      const { statusCode = 0, headers } = res;
+
+      // Handle redirects
+      if ([301, 302, 303, 307, 308].includes(statusCode) && headers.location) {
+        res.resume(); // drain
+        if (maxRedirects <= 0) {
+          if (!resolved) {
+            resolved = true;
+            reject(new Error('Too many redirects'));
+          }
+          return;
+        }
+        try {
+          const nextUrl = new URL(headers.location, urlObj);
+          fetchPageTitle(nextUrl.toString(), maxRedirects - 1)
+            .then((title) => {
+              setCachedTitle(targetUrl, title);
+              if (!resolved) { resolved = true; resolve(title); }
+            })
+            .catch((e) => { if (!resolved) { resolved = true; reject(e); } });
+        } catch (e) {
+          if (!resolved) { resolved = true; reject(e); }
+        }
         return;
       }
-      
+
+      // Only parse body for 2xx
+      if (statusCode < 200 || statusCode >= 300) {
+        res.resume();
+        if (!resolved) { resolved = true; reject(new Error(`HTTP ${statusCode}`)); }
+        return;
+      }
+
+      const contentType = headers['content-type'] || '';
+      const looksHtml = contentType.includes('text/html') || contentType.includes('application/xhtml+xml') || contentType === '';
+      if (!looksHtml) {
+        res.resume();
+        if (!resolved) { resolved = true; reject(new Error('Not an HTML page')); }
+        return;
+      }
+
+      let data = '';
+      const MAX_BYTES = 100 * 1024; // 100KB
       res.on('data', (chunk) => {
+        if (resolved) return;
         data += chunk;
-        // Stop collecting data once we have enough to find the title
-        if (data.length > 50000) { // Limit to 50KB
+        // Try early extraction to minimize bytes
+        const title = extractTitle(data);
+        if (title) {
+          setCachedTitle(targetUrl, title);
+          resolved = true;
+          res.destroy();
+          resolve(title);
+          return;
+        }
+        if (data.length > MAX_BYTES) {
           res.destroy();
         }
       });
-      
+
       res.on('end', () => {
+        if (resolved) return;
         const title = extractTitle(data);
         if (title) {
+          setCachedTitle(targetUrl, title);
+          resolved = true;
           resolve(title);
         } else {
+          resolved = true;
           reject(new Error('No title found'));
         }
+      });
+
+      res.on('error', (err) => {
+        if (!resolved) { resolved = true; reject(err); }
       });
     });
 
     req.on('error', (error) => {
-      reject(error);
+      if (!resolved) { resolved = true; reject(error); }
     });
 
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error('Request timeout'));
+      if (!resolved) { resolved = true; reject(new Error('Request timeout')); }
     });
 
     req.end();
@@ -148,7 +267,7 @@ const server = http.createServer(async (req, res) => {
 
     console.log(`Fetching title for: ${targetUrl}`);
     
-    const title = await fetchPageTitle(targetUrl);
+  const title = await fetchPageTitle(targetUrl);
     
     res.writeHead(200);
     res.end(JSON.stringify({ 
@@ -167,8 +286,6 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 });
-
-const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {
   console.log(`Title extraction proxy server running on http://localhost:${PORT}`);

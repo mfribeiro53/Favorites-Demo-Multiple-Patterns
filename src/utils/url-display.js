@@ -13,24 +13,16 @@ export const escapeAttr = (str) => escapeHTML(str);
 
 export const normalizeUrl = (url) => {
   if (!url || typeof url !== 'string') return '';
-  return url.startsWith('http') ? url : `https://${url}`;
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  // If already has http/https (case-insensitive), keep as-is
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  // Support protocol-relative URLs like //example.com
+  if (/^\/\//.test(trimmed)) return `https:${trimmed}`;
+  return `https://${trimmed}`;
 };
 
-const KNOWN_DOMAINS = {
-  'ups': 'UPS',
-  'fedex': 'FedEx',
-  'github': 'GitHub',
-  'google': 'Google',
-  'youtube': 'YouTube',
-  'wikipedia': 'Wikipedia',
-  'facebook': 'Facebook',
-  'twitter': 'Twitter',
-  'linkedin': 'LinkedIn',
-  'amazon': 'Amazon',
-  'microsoft': 'Microsoft',
-  'apple': 'Apple',
-  'netflix': 'Netflix'
-};
+// No static domain map: prefer real titles via proxy; this is a heuristic fallback
 
 export const deriveDisplayName = (fullUrl) => {
   try {
@@ -44,7 +36,13 @@ export const deriveDisplayName = (fullUrl) => {
     const parts = displayName.split('.');
     if (parts.length >= 2) {
       const main = parts[parts.length - 2];
-      displayName = KNOWN_DOMAINS[main.toLowerCase()] || (main.charAt(0).toUpperCase() + main.slice(1));
+      const mainLower = main.toLowerCase();
+      // Heuristic: short domains (<=4) are often acronyms (UPS, DHL)
+      if (/^[a-z0-9]+$/.test(mainLower) && mainLower.length <= 4) {
+        displayName = mainLower.toUpperCase();
+      } else {
+        displayName = mainLower.charAt(0).toUpperCase() + mainLower.slice(1);
+      }
       const ext = parts[parts.length - 1];
       if (ext !== 'com') displayName += ` (.${ext})`;
     }
