@@ -28,6 +28,7 @@
 // Import the store from the new modular architecture
 // This demonstrates how clean module separation improves dependency management
 import { favoritesStore } from './favorites-store-modular.js';
+import { escapeHTML as escapeHTMLUtil, escapeAttr as escapeAttrUtil, normalizeUrl as normalizeUrlUtil, deriveDisplayName } from './utils/url-display.js';
 
 // Import database service for real data persistence
 import { 
@@ -101,12 +102,9 @@ async function syncFavoritesFromDatabase() {
     if (dbFavorites.length > 0) {
       const favoritesSet = new Set(dbFavorites);
       
-      // Access the internal state store directly for initial sync
-      // This avoids triggering database writes during initialization
-      const stateStore = favoritesStore._getStateStore ? favoritesStore._getStateStore() : null;
-      
-      if (stateStore) {
-        stateStore.restore(favoritesSet);
+      // Use public hydrate API for initial sync (silent by default)
+      if (favoritesStore.hydrate) {
+        favoritesStore.hydrate(favoritesSet, { notify: false });
         console.log(`Synced ${dbFavorites.length} favorites from database to local state`);
       } else {
         // Fallback: add them one by one (will trigger database calls but should be idempotent)
@@ -170,99 +168,47 @@ const fetchPageTitle = async (url) => {
 
   try {
     // Ensure URL has protocol
-    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+  const fullUrl = normalizeUrlUtil(url);
     const urlObj = new URL(fullUrl);
     
     // Strategy 1: Try to use a title extraction service (when available)
-    // Check if our title extraction server is running
-    try {
+    // Add timeout and a single retry for robustness
+    const fetchWithTimeout = (resource, opts = {}, ms = 2500) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), ms);
+      return fetch(resource, { ...opts, signal: controller.signal })
+        .finally(() => clearTimeout(id));
+    };
+
+    const tryTitleServer = async () => {
       const titleServerUrl = `http://localhost:3001/api/page-title?url=${encodeURIComponent(fullUrl)}`;
-      const response = await fetch(titleServerUrl);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.title) {
-          pageTitleCache.set(url, data.title);
-          return data.title;
+      try {
+        const response = await fetchWithTimeout(titleServerUrl, {}, 2500);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.title) {
+            pageTitleCache.set(url, data.title);
+            return data.title;
+          }
         }
+      } catch (err) {
+        // swallow, we'll fallback below
       }
-    } catch (serverError) {
-      // Title server not available, fall back to client-side extraction
-      console.log('Title server not available, using fallback method');
+      return null;
+    };
+
+    let serverTitle = await tryTitleServer();
+    if (!serverTitle) {
+      // one retry with slightly longer timeout
+      serverTitle = await tryTitleServer();
     }
+    if (serverTitle) return serverTitle;
     
     // Strategy 2: Create intelligent display names based on URL structure
-    let displayName = urlObj.hostname;
+  let displayName = deriveDisplayName(fullUrl);
     
-    // Remove 'www.' prefix for cleaner display
-    if (displayName.startsWith('www.')) {
-      displayName = displayName.substring(4);
-    }
-    
-    // Capitalize first letter and handle common domains
-    const domainParts = displayName.split('.');
-    if (domainParts.length >= 2) {
-      const mainDomain = domainParts[domainParts.length - 2];
-      
-      // Special handling for well-known domains
-      const knownDomains = {
-        'ups': 'UPS',
-        'fedex': 'FedEx',
-        'github': 'GitHub',
-        'google': 'Google',
-        'youtube': 'YouTube',
-        'wikipedia': 'Wikipedia',
-        'facebook': 'Facebook',
-        'twitter': 'Twitter',
-        'linkedin': 'LinkedIn',
-        'amazon': 'Amazon',
-        'microsoft': 'Microsoft',
-        'apple': 'Apple',
-        'netflix': 'Netflix'
-      };
-      
-      displayName = knownDomains[mainDomain.toLowerCase()] || 
-                   mainDomain.charAt(0).toUpperCase() + mainDomain.slice(1);
-      
-      // Add domain extension context if it's not .com
-      const extension = domainParts[domainParts.length - 1];
-      if (extension !== 'com') {
-        displayName += ` (.${extension})`;
-      }
-    }
-    
-    // Strategy 3: Try iframe approach for same-origin or CORS-enabled sites
-    // This is a fallback that might work for some sites
-    try {
-      const response = await fetch(fullUrl, {
-        method: 'HEAD', // Just check if the site is accessible
-        mode: 'no-cors'
-      });
-      
-      // If we get here without error, the site exists
-      // For demo purposes, we'll enhance the display name
-      if (urlObj.pathname && urlObj.pathname !== '/') {
-        const pathParts = urlObj.pathname.split('/').filter(part => part);
-        if (pathParts.length > 0) {
-          // Add context from URL path
-          let lastPart = pathParts[pathParts.length - 1];
-          
-          // Remove file extensions for cleaner display
-          if (lastPart.includes('.')) {
-            lastPart = lastPart.split('.')[0];
-          }
-          
-          // Skip common home/index page names
-          const skipParts = ['index', 'home', 'default', 'main'];
-          
-          if (lastPart && !skipParts.includes(lastPart.toLowerCase())) {
-            displayName += ` - ${lastPart.charAt(0).toUpperCase() + lastPart.slice(1)}`;
-          }
-        }
-      }
-    } catch (corsError) {
-      // Expected for most external sites - just use our smart domain name
-    }
+    // Strategy 3: Pure client-side path-based enhancement (no network probe)
+  // deriveDisplayName already applied path-based enhancement
     
     pageTitleCache.set(url, displayName);
     return displayName;
@@ -284,7 +230,7 @@ const fetchPageTitle = async (url) => {
  */
 const createResourceFromUrl = async (url) => {
   // Ensure URL has proper protocol for consistency
-  const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+  const normalizedUrl = normalizeUrlUtil(url);
   
   // Check if this URL exists in our predefined resources first
   const predefinedResource = allResources.find(res => 
@@ -315,19 +261,63 @@ const createResourceFromUrl = async (url) => {
  * - NO SIDE EFFECTS: Doesn't modify global state or DOM directly
  * - TEMPLATE GENERATION: Separates data from presentation
  * 
- * Security Note: In production, you'd want to escape HTML to prevent XSS
+ * Security: All dynamic content is escaped via helpers to prevent XSS.
+ * Buttons carry data via attributes and are wired with event delegation
+ * to avoid embedding user-controlled strings in inline JavaScript.
  */
+// SECURITY HELPERS: Escape HTML/attribute content to prevent XSS
+// These helpers are used whenever user-controlled strings are rendered
+// to ensure the DOM is not populated with unsafe HTML.
+const escapeHTML = (str) => String(escapeHTMLUtil(str))
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+  .replace(/`/g, '&#96;');
+
+const escapeAttr = (str) => escapeAttrUtil(str);
+
+// PERFORMANCE/A11Y HELPER: Update a star button's UI/state
+const setStarState = (btn, isFav) => {
+  if (!btn) return;
+  const name = btn.getAttribute('data-name') || 'item';
+  const actionVerb = isFav ? 'Remove from favorites' : 'Add to favorites';
+  const ariaPressed = isFav ? 'true' : 'false';
+  const starClassFav = 'favorited';
+  const starClassNot = 'not-favorited';
+  btn.classList.remove(isFav ? starClassNot : starClassFav);
+  btn.classList.add(isFav ? starClassFav : starClassNot);
+  btn.setAttribute('aria-pressed', ariaPressed);
+  const label = `${actionVerb}: ${name}`;
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', label);
+  btn.textContent = isFav ? '★' : '☆';
+};
+
 const createResourceHtml = (resource, isFav) => {
   // CONDITIONAL STYLING: Different CSS classes based on favorite status
   const starClass = isFav ? 'favorited' : 'not-favorited';
   
-  // INTERACTIVE ELEMENT: Button with onclick handler for toggling
-  // The onclick calls toggleFavorite() with the resource URL
-  const starButton = `<button onclick="toggleFavorite('${resource.url}')" class="${starClass}">${isFav ? '★' : '☆'}</button>`;
+  // Escape display fields first (used in aria-label/title and text)
+  const safeName = escapeHTML(resource.name);
+  const safeUrl = escapeHTML(resource.url);
+  
+  // ACCESSIBILITY: Descriptive label and state
+  const actionVerb = isFav ? 'Remove from favorites' : 'Add to favorites';
+  const ariaPressed = isFav ? 'true' : 'false';
+  const ariaLabel = `${actionVerb}: ${safeName}`;
+  
+  // INTERACTIVE ELEMENT: Button marked for event delegation (no inline JS)
+  // The URL is stored in a data attribute and handled by a single
+  // document-level click listener for .star-toggle.
+  // Avoid embedding user data into JS; use a data attribute and event delegation
+  const starButton = `<button class="star-toggle ${starClass}" data-url="${escapeAttr(resource.url)}" data-name="${escapeAttr(resource.name)}" aria-label="${ariaLabel}" aria-pressed="${ariaPressed}" title="${ariaLabel}">${isFav ? '★' : '☆'}</button>`;
   
   // SEMANTIC HTML: Proper list item structure with meaningful content
+  // All displayed text is escaped to prevent injection.
   return `<li class="resource-item">
-    <span>${resource.name} (${resource.url})</span>
+    <span>${safeName} (${safeUrl})</span>
     ${starButton}
   </li>`;
 };
@@ -393,15 +383,26 @@ const toggleFavorite = async (url) => {
 const renderResourceList = (currentFavorites) => {
   // DOM MANIPULATION: Get the container element for this component
   const container = document.getElementById('resource-list');
-  
-  // DYNAMIC HTML GENERATION: Build the entire component HTML
-  // - Map over all resources
-  // - For each resource, check if it's in the currentFavorites Set
-  // - Generate HTML using our utility function
-  // - Join all HTML strings together
-  container.innerHTML = `<h2>All Resources</h2><ul>${
-    allResources.map(res => createResourceHtml(res, currentFavorites.has(res.url))).join('')
-  }</ul>`;
+  const list = container.querySelector('ul');
+  const expectedLength = allResources.length;
+  if (list && list.children.length === expectedLength) {
+    // Fast path: update star states in place
+    const buttons = list.querySelectorAll('button.star-toggle');
+    const byUrl = new Map();
+    buttons.forEach(btn => {
+      const url = btn.getAttribute('data-url');
+      if (url) byUrl.set(url, btn);
+    });
+    allResources.forEach(res => {
+      const btn = byUrl.get(res.url);
+      if (btn) setStarState(btn, currentFavorites.has(res.url));
+    });
+  } else {
+    // Full render path
+    container.innerHTML = `<h2>All Resources</h2><ul>${
+      allResources.map(res => createResourceHtml(res, currentFavorites.has(res.url))).join('')
+    }</ul>`;
+  }
     
   // Note: No return value needed - this function produces side effects (DOM updates)
 };
@@ -426,6 +427,11 @@ const renderResourceList = (currentFavorites) => {
 const renderFavoritesList = async (currentFavorites) => {
   // DOM MANIPULATION: Get the container for favorites display
   const container = document.getElementById('favorites-list');
+  // PERFORMANCE: Skip re-render if favorite set unchanged since last render
+  const signature = `size:${currentFavorites.size}|${Array.from(currentFavorites).sort().join('|')}`;
+  if (container.__lastSignature === signature) {
+    return;
+  }
   
   // CONDITIONAL RENDERING: Different UI for empty vs populated state
   if (currentFavorites.size === 0) {
@@ -433,7 +439,8 @@ const renderFavoritesList = async (currentFavorites) => {
     container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><p><em>No favorites selected</em></p>`;
   } else {
     // LOADING STATE: Show loading message while processing URLs
-    container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><p><em>Processing URLs...</em></p>`;
+  container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><p><em>Processing URLs...</em></p>`;
+  container.setAttribute('aria-busy', 'true');
     
     // POPULATED STATE: Show ALL favorited resources with page titles
     try {
@@ -444,16 +451,22 @@ const renderFavoritesList = async (currentFavorites) => {
       const favoriteResourcesPromises = favoriteUrlsArray.map(url => createResourceFromUrl(url));
       const favoriteResources = await Promise.all(favoriteResourcesPromises);
       
-      // Render all favorited resources with their fetched titles
+  // Sort favorites deterministically by display name for stable UI
+  favoriteResources.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Render all favorited resources with their fetched titles
       // Note: We pass 'true' for isFav since all items in this list are favorites
-      container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><ul>${
+  container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><ul>${
         favoriteResources.map(res => createResourceHtml(res, true)).join('')
       }</ul>`;
+  container.removeAttribute('aria-busy');
+  container.__lastSignature = signature;
       
     } catch (error) {
       // ERROR HANDLING: Show error message if title fetching fails
       console.error('Error fetching page titles:', error);
-      container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><p><em>Error loading page titles</em></p>`;
+  container.innerHTML = `<h2>Favorites (${currentFavorites.size})</h2><p><em>Error loading page titles</em></p>`;
+  container.removeAttribute('aria-busy');
     }
   }
 };
@@ -476,12 +489,26 @@ const renderFavoritesList = async (currentFavorites) => {
 const renderFrequentlyVisitedList = (currentFavorites) => {
   // DOM MANIPULATION: Get container for frequently visited display
   const container = document.getElementById('frequent-list');
-  
-  // TEMPLATE GENERATION: Similar to other lists but using different data source
-  // This shows how the same rendering pattern can be reused for different data
-  container.innerHTML = `<h2>Frequently Visited</h2><ul>${
-    frequentlyVisited.map(res => createResourceHtml(res, currentFavorites.has(res.url))).join('')
-  }</ul>`;
+  const list = container.querySelector('ul');
+  const expectedLength = frequentlyVisited.length;
+  if (list && list.children.length === expectedLength) {
+    const buttons = list.querySelectorAll('button.star-toggle');
+    const byUrl = new Map();
+    buttons.forEach(btn => {
+      const url = btn.getAttribute('data-url');
+      if (url) byUrl.set(url, btn);
+    });
+    frequentlyVisited.forEach(res => {
+      const btn = byUrl.get(res.url);
+      if (btn) setStarState(btn, currentFavorites.has(res.url));
+    });
+  } else {
+    // TEMPLATE GENERATION: Similar to other lists but using different data source
+    // This shows how the same rendering pattern can be reused for different data
+    container.innerHTML = `<h2>Frequently Visited</h2><ul>${
+      frequentlyVisited.map(res => createResourceHtml(res, currentFavorites.has(res.url))).join('')
+    }</ul>`;
+  }
 };
 
 // =============================================================================
@@ -504,19 +531,21 @@ let logCounter = 0;
  * - Timestamps for tracking when events occur
  * - Auto-scroll to show latest messages
  * - Visual feedback for observer pattern activity
+ * - Security: appends TextNodes (no innerHTML concatenation)
  */
 const log = (message) => {
-    // DOM MANIPULATION: Get the logs container
-    const logsDiv = document.getElementById('logs');
+  // DOM MANIPULATION: Get the logs container
+  const logsDiv = document.getElementById('logs');
     
-    // TIMESTAMP: Add current time for debugging
-    const timestamp = new Date().toLocaleTimeString();
+  // TIMESTAMP: Add current time for debugging
+  const timestamp = new Date().toLocaleTimeString();
     
-    // APPEND MESSAGE: Add new log entry (preserving previous entries)
-    logsDiv.innerHTML += `[${timestamp}] ${message}\n`;
+  // APPEND MESSAGE: Use text nodes to avoid HTML injection
+  const entry = document.createTextNode(`[${timestamp}] ${String(message)}\n`);
+  logsDiv.appendChild(entry);
     
-    // AUTO-SCROLL: Ensure latest messages are visible
-    logsDiv.scrollTop = logsDiv.scrollHeight;
+  // AUTO-SCROLL: Ensure latest messages are visible
+  logsDiv.scrollTop = logsDiv.scrollHeight;
 };
 
 // =============================================================================
@@ -730,23 +759,33 @@ const clearAll = async () => {
  * - Auto-disappearing messages (don't clutter the UI)
  * - Consistent feedback for all user actions
  */
+let __statusTimeoutId;
 const showStatus = (message, isPositive) => {
-    // DOM MANIPULATION: Get the status display element
-    const statusDiv = document.getElementById('status');
-    
-    // MESSAGE DISPLAY: Set the text content
-    statusDiv.textContent = message;
-    
-    // VISUAL FEEDBACK: Apply appropriate CSS class for styling
-    // 'positive' class = green styling, 'negative' class = red styling
-    statusDiv.className = `status ${isPositive ? 'positive' : 'negative'}`;
-    
-    // AUTO-HIDE: Clear the message after 3 seconds
-    // This prevents the UI from getting cluttered with old messages
-    setTimeout(() => {
-        statusDiv.textContent = '';
-        statusDiv.className = 'status'; // Reset to default styling
-    }, 3000); // 3000 milliseconds = 3 seconds
+  // DOM MANIPULATION: Get the status display element
+  const statusDiv = document.getElementById('status');
+  if (!statusDiv) return;
+  
+  // ACCESSIBILITY: live region for announcements
+  statusDiv.setAttribute('role', 'status');
+  statusDiv.setAttribute('aria-live', 'polite');
+  
+  // MESSAGE DISPLAY: Set the text content
+  statusDiv.textContent = String(message);
+  
+  // VISUAL FEEDBACK: Apply appropriate CSS class for styling
+  // 'positive' class = green styling, 'negative' class = red styling
+  statusDiv.className = `status ${isPositive ? 'positive' : 'negative'}`;
+  
+  // AUTO-HIDE: Clear the message after 3 seconds
+  // Cancel any pending hide to avoid overlaps
+  if (__statusTimeoutId) clearTimeout(__statusTimeoutId);
+  __statusTimeoutId = setTimeout(() => {
+    statusDiv.textContent = '';
+    statusDiv.className = 'status'; // Reset to default styling
+    statusDiv.removeAttribute('role');
+    statusDiv.removeAttribute('aria-live');
+    __statusTimeoutId = undefined;
+  }, 3000);
 };
 
 // =============================================================================
@@ -779,13 +818,24 @@ loadApplicationData().then(() => {
   console.error('Database error:', error.message);
 });
 
+// EVENT DELEGATION: Handle star button toggles via a single listener
+// This replaces inline onclick handlers and avoids injecting user data into JS.
+document.addEventListener('click', (e) => {
+  const target = e.target;
+  if (target && target.classList && target.classList.contains('star-toggle')) {
+    const url = target.getAttribute('data-url');
+    if (url) {
+      // Call the existing toggleFavorite handler
+      toggleFavorite(url);
+    }
+  }
+});
+
 // =============================================================================
 // GLOBAL FUNCTION EXPOSURE FOR HTML ONCLICK HANDLERS
 // =============================================================================
 // Since we're using ES6 modules, functions are not automatically global.
-// We need to explicitly expose them for HTML onclick handlers to work.
-
-window.toggleFavorite = toggleFavorite;
+// Only expose functions still used by static page controls.
 window.addFavorite = addFavorite;
 window.removeFavorite = removeFavorite;
 window.clearAll = clearAll;
@@ -912,9 +962,9 @@ const updateActionHistoryDisplay = () => {
             itemClass += ' current';  // Current position in history
         }
         
-        // ACTION DISPLAY: Show action description with visual indicators
+    // ACTION DISPLAY: Show action description with visual indicators (escaped)
         historyHtml += `<div class="${itemClass}">
-            ${index + 1}. ${action.description}`;
+      ${index + 1}. ${escapeHTML(action.description)}`;
         
         if (index === history.currentIndex) {
             historyHtml += ' ← Current';

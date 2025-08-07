@@ -6,16 +6,16 @@
 // ES6 import for the modular store
 import { createFavoritesStore } from '../src/favorites-store-modular.js';
 
-function runTests() {
+async function runTests() {
     console.log('🧪 Running Modular Favorites Store Tests...\n');
     
     let testCount = 0;
     let passedTests = 0;
     
-    function test(description, testFn) {
+    async function test(description, testFn) {
         testCount++;
         try {
-            testFn();
+            await testFn();
             console.log(`✅ Test ${testCount}: ${description}`);
             passedTests++;
         } catch (error) {
@@ -31,7 +31,7 @@ function runTests() {
     }
     
     // Test 1: Basic store creation
-    test('Store creation', () => {
+    await test('Store creation', async () => {
         const store = createFavoritesStore();
         assert(typeof store === 'object', 'Store should be an object');
         assert(typeof store.addFavorite === 'function', 'Should have addFavorite method');
@@ -41,28 +41,28 @@ function runTests() {
     });
     
     // Test 2: Adding favorites
-    test('Adding favorites', () => {
+    await test('Adding favorites', async () => {
         const store = createFavoritesStore();
         const testUrl = 'https://example.com';
         
-        store.addFavorite(testUrl);
+        await store.addFavorite(testUrl);
         assert(store.isFavorite(testUrl), 'URL should be marked as favorite');
         assert(store.getCount() === 1, 'Count should be 1');
     });
     
     // Test 3: Removing favorites
-    test('Removing favorites', () => {
+    await test('Removing favorites', async () => {
         const store = createFavoritesStore();
         const testUrl = 'https://example.com';
         
-        store.addFavorite(testUrl);
-        store.removeFavorite(testUrl);
+        await store.addFavorite(testUrl);
+        await store.removeFavorite(testUrl);
         assert(!store.isFavorite(testUrl), 'URL should not be marked as favorite');
         assert(store.getCount() === 0, 'Count should be 0');
     });
     
     // Test 4: Observer pattern
-    test('Observer notifications', () => {
+    await test('Observer notifications', async () => {
         const store = createFavoritesStore();
         let notificationCount = 0;
         let lastNotifiedState = null;
@@ -77,13 +77,13 @@ function runTests() {
         assert(lastNotifiedState.size === 0, 'Initial state should be empty');
         
         // Add favorite
-        store.addFavorite('https://test.com');
+        await store.addFavorite('https://test.com');
         assert(notificationCount === 2, 'Should get notification after adding');
         assert(lastNotifiedState.size === 1, 'State should have 1 item');
     });
     
     // Test 5: State immutability
-    test('State immutability', () => {
+    await test('State immutability', async () => {
         const store = createFavoritesStore();
         let capturedState = null;
         
@@ -91,7 +91,7 @@ function runTests() {
             capturedState = favorites;
         });
         
-        store.addFavorite('https://test.com');
+        await store.addFavorite('https://test.com');
         const originalSize = capturedState.size;
         
         // Try to modify the captured state
@@ -103,41 +103,41 @@ function runTests() {
     });
     
     // Test 6: Duplicate handling
-    test('Duplicate handling', () => {
+    await test('Duplicate handling', async () => {
         const store = createFavoritesStore();
         const testUrl = 'https://example.com';
         
-        store.addFavorite(testUrl);
-        store.addFavorite(testUrl); // Add same URL again
+        await store.addFavorite(testUrl);
+        await store.addFavorite(testUrl); // Add same URL again
         
         assert(store.getCount() === 1, 'Should only have 1 item (no duplicates)');
     });
     
     // Test 7: Clear all
-    test('Clear all favorites', () => {
+    await test('Clear all favorites', async () => {
         const store = createFavoritesStore();
         
-        store.addFavorite('https://example1.com');
-        store.addFavorite('https://example2.com');
-        store.clearAll();
+        await store.addFavorite('https://example1.com');
+        await store.addFavorite('https://example2.com');
+        await store.clearAll();
         
         assert(store.getCount() === 0, 'Count should be 0 after clearing');
         assert(store.getAllFavorites().length === 0, 'Should have no favorites');
     });
     
     // Test 8: Unsubscribe
-    test('Unsubscribe functionality', () => {
+    await test('Unsubscribe functionality', async () => {
         const store = createFavoritesStore();
         let callCount = 0;
         
         const callback = () => { callCount++; };
         store.subscribe(callback);
         
-        store.addFavorite('https://test.com'); // Should trigger callback
+        await store.addFavorite('https://test.com'); // Should trigger callback
         const countAfterAdd = callCount;
         
         store.unsubscribe(callback);
-        store.addFavorite('https://test2.com'); // Should not trigger callback
+        await store.addFavorite('https://test2.com'); // Should not trigger callback
         
         assert(callCount === countAfterAdd, 'Callback should not be called after unsubscribe');
     });
@@ -152,4 +152,4 @@ function runTests() {
     }
 }
 
-runTests();
+await runTests();

@@ -269,16 +269,24 @@ export const createFavoritesStore = () => {
     },
 
     // ========================================================================
-    // INTERNAL ACCESS (FOR INITIALIZATION)
+    // INITIALIZATION / HYDRATION API
     // ========================================================================
     
     /**
-     * Get direct access to state store for initialization purposes
-     * This should only be used during app startup for syncing from database
-     * @returns {Object} Internal state store
+     * Hydrate the store from a snapshot (e.g., database on startup).
+     * By default this is silent (no command history, no notifications),
+     * preserving initialization semantics. Optionally notify observers.
+     * @param {Iterable<string>|Set<string>|string[]} snapshot
+     * @param {{ notify?: boolean }} [options]
      */
-    _getStateStore() {
-      return stateStore;
+    hydrate(snapshot, options = {}) {
+      const { notify = false } = options;
+      // Accept array, set, or any iterable of strings
+      const incoming = snapshot instanceof Set ? snapshot : new Set(snapshot);
+      stateStore.restore(incoming);
+      if (notify) {
+        observerManager.notifyAll(stateStore.getAll());
+      }
     },
 
     /**
