@@ -1,14 +1,19 @@
+// Database Service unit tests
+// Purpose: Validate mapping, caching, and error handling logic in src/database-service.js
+// Strategy: Stub global fetch to simulate API responses, assert transformed outputs and cache behavior.
 import { expect } from 'chai';
 
+// Keep original fetch to restore after each test
 const originalFetch = globalThis.fetch;
 
+// Tiny helper to craft Response-like objects for our stubs
 function makeResponse({ ok = true, status = 200, json = () => ({}), text = async () => '' } = {}) {
   return { ok, status, json: async () => json(), text };
 }
 
 describe('Database Service', () => {
   beforeEach(() => {
-    // Stub fetch for both test-connection and API calls
+  // Stub fetch for both test-connection and API calls with predictable fixtures
     globalThis.fetch = async (url, init) => {
       const u = String(url);
       if (u.endsWith('/api/test-connection')) {
@@ -37,10 +42,12 @@ describe('Database Service', () => {
   });
 
   afterEach(() => {
+  // Always restore the original fetch so tests remain isolated
     globalThis.fetch = originalFetch;
   });
 
   it('maps Url -> url for getAllResources', async () => {
+  // Verifies that API shape with capitalized Url is mapped to lowercase url for app consumption
     const { getAllResources } = await import('../src/database-service.js');
     const resources = await getAllResources(false);
     expect(resources).to.deep.equal([
@@ -50,6 +57,7 @@ describe('Database Service', () => {
   });
 
   it('uses cache for getFrequentlyVisited and is cleared by clearAllCaches', async () => {
+  // Ensures repeated calls hit in-memory cache until explicitly cleared
     let count = 0;
     globalThis.fetch = async (url, init) => {
       const u = String(url);
@@ -74,6 +82,7 @@ describe('Database Service', () => {
   });
 
   it('throws on non-200 for getUserFavorites', async () => {
+  // Error path: non-200 should result in a thrown error from database-service
     globalThis.fetch = async (url, init) => {
       const u = String(url);
       if (u.endsWith('/api/test-connection')) return makeResponse({ ok: true, status: 200, json: () => ({ success: true }) });

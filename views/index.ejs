@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Favorites Store Demo</title>
+    <title><%= typeof title !== 'undefined' ? title : 'Favorites Store Demo' %></title>
     <!-- 
         EXTERNAL STYLESHEET: Separation of concerns
         - HTML handles structure and content
         - CSS handles presentation and styling
         - JavaScript handles behavior and interactivity
     -->
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/styles.css">
+    <!-- Example: to inject initial data from server later, add a script tag here.
+         Avoid placing raw EJS tags in comments to prevent parser errors. -->
+    
 </head>
 <body>
     <!-- 
@@ -163,6 +166,6 @@
         - Enables tree-shaking in production builds
         - More explicit dependency declarations
     -->
-    <script type="module" src="src/demo.js"></script>
+    <script type="module" src="/src/demo.js"></script>
 </body>
 </html>

@@ -1,3 +1,6 @@
+// Title proxy integration tests
+// Purpose: Spin up a local HTML server and the proxy, and validate title extraction,
+// non-HTML rejection, redirects, and missing-parameter validation.
 import { expect } from 'chai';
 import http from 'http';
 import { once } from 'events';
@@ -5,6 +8,7 @@ import { once } from 'events';
 // We will spawn the title-proxy as a child process to use its actual server.
 import { spawn } from 'node:child_process';
 
+// Minimal local server to provide HTML, JSON, and a redirect for the proxy to consume
 function startSimpleHtmlServer(port) {
   const html = '<!doctype html><html><head><title>Local Test Page</title></head><body>ok</body></html>';
   const server = http.createServer((req, res) => {
@@ -28,6 +32,7 @@ function startSimpleHtmlServer(port) {
   });
 }
 
+// Wait until the proxy prints its ready banner in stdout
 async function waitForProxyReady(proc, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('proxy start timeout')), timeoutMs);
@@ -42,6 +47,7 @@ async function waitForProxyReady(proc, timeoutMs = 5000) {
   });
 }
 
+// Simple GET helper returning raw body for manual JSON.parse
 async function httpGet(url) {
   return new Promise((resolve, reject) => {
     http.get(url, (res) => {
@@ -61,6 +67,7 @@ describe('Integration: title-proxy', function () {
   const proxyPort = 3002; // default in title-proxy
 
   before(async () => {
+    // Start both local content server and the proxy under test
     htmlServer = await startSimpleHtmlServer(htmlPort);
     proxyProc = spawn(process.execPath, ['server/title-proxy.js'], {
       env: { ...process.env, PORT: String(proxyPort) },
@@ -70,6 +77,7 @@ describe('Integration: title-proxy', function () {
   });
 
   after(async () => {
+    // Gracefully shut down servers after tests
     if (htmlServer) await new Promise((r) => htmlServer.close(r));
     if (proxyProc) proxyProc.kill('SIGTERM');
     // Give it a moment to close

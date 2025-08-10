@@ -1,3 +1,5 @@
+// Favorites Store advanced behaviors
+// Purpose: Validate batch operations, hydration semantics, and multi-step undo/redo consistency.
 import { expect } from 'chai';
 import { createFavoritesStore } from '../../src/favorites-store-modular.js';
 
@@ -5,6 +7,7 @@ describe('Favorites Store - advanced', function () {
   this.timeout(10000);
 
   it('addMultiple handles duplicates and notifies once per execute', async () => {
+  // addMultiple should aggregate updates into a single executed command and notify accordingly
     const store = createFavoritesStore();
     let notifications = 0;
     store.subscribe(() => { notifications += 1; });
@@ -17,6 +20,7 @@ describe('Favorites Store - advanced', function () {
   });
 
   it('hydrate replaces state; notify option controls initial broadcast', async () => {
+    // hydrate(snapshot, { notify }) swaps state; notify=false is silent, notify=true emits once
     const store = createFavoritesStore();
     let notified = 0;
     store.subscribe(() => { notified += 1; });
@@ -36,6 +40,7 @@ describe('Favorites Store - advanced', function () {
   });
 
   it('undo/redo across multiple actions maintains state and notifications', async () => {
+    // Ensure command history is coherent across several mutations, with redo cleared by new branch
     const store = createFavoritesStore();
     let notes = 0;
     store.subscribe(() => { notes += 1; });

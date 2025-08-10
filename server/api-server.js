@@ -14,10 +14,12 @@
  */
 
 import express from 'express';
-import sql from 'mssql';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import apiRouter from './routes/api.js';
+import webRouter from './routes/web.js';
+import { initializeDatabase, closeDatabase } from './services/dbService.js';
 
 // Get __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -29,248 +31,24 @@ const PORT = 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..')));
 
-// Database configuration - SQL Server Authentication
-const dbConfig = {
-  server: 'localhost',
-  port: 1433,
-  database: 'TestNet_001',
-  user: 'sa',
-  password: 'Reza!546$%sun',
-  options: {
-    encrypt: false,
-    trustServerCertificate: true,
-    enableArithAbort: true,
-    useUTC: false
-  },
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000
-  }
-};
+// View engine setup (EJS)
+app.set('views', path.join(__dirname, '..', 'views'));
+app.set('view engine', 'ejs');
 
-// Global connection pool
-let pool;
+// Routers
+app.use('/api', apiRouter);
+app.use('/', webRouter);
 
-/**
- * Initialize database connection pool
- */
-async function initializeDatabase() {
-  try {
-    pool = await sql.connect(dbConfig);
-    console.log('✅ Connected to SQL Server database');
-    return true;
-  } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
-    return false;
-  }
-}
+// Static assets (no index file here; EJS handles '/')
+app.use(express.static(path.join(__dirname, '..'), { index: false }));
 
-async function ensureDbConnected() {
-  if (!pool) {
-    const connected = await initializeDatabase();
-    if (!connected) {
-      throw new Error('Database not connected');
-    }
-  }
-}
-
-/**
- * Execute a stored procedure
- * @param {string} procedureName - Name of the stored procedure
- * @param {Object} parameters - Parameters for the procedure
- * @returns {Promise<Array>} Query results
- */
-async function executeStoredProcedure(procedureName, parameters = {}) {
-  try {
-    const request = pool.request();
-    
-    // Add parameters based on the procedure
-    switch (procedureName) {
-      case 'FavoritesDemo.sp_GetAllResources':
-        if (parameters.userId) request.input('UserId', sql.Int, parameters.userId);
-        break;
-        
-      case 'FavoritesDemo.sp_GetFrequentlyVisited':
-        if (parameters.userId) request.input('UserId', sql.Int, parameters.userId);
-        if (parameters.topCount) request.input('TopCount', sql.Int, parameters.topCount);
-        break;
-        
-      case 'FavoritesDemo.sp_GetUserFavorites':
-        if (parameters.userId) request.input('UserId', sql.Int, parameters.userId);
-        break;
-        
-      case 'FavoritesDemo.sp_AddFavorite':
-        if (parameters.userId) request.input('UserId', sql.Int, parameters.userId);
-        if (parameters.url) request.input('Url', sql.NVarChar(500), parameters.url);
-        if (parameters.displayName) request.input('DisplayName', sql.NVarChar(200), parameters.displayName);
-        if (parameters.userNotes) request.input('UserNotes', sql.NVarChar(1000), parameters.userNotes);
-        break;
-        
-      case 'FavoritesDemo.sp_RemoveFavorite':
-        if (parameters.userId) request.input('UserId', sql.Int, parameters.userId);
-        if (parameters.url) request.input('Url', sql.NVarChar(500), parameters.url);
-        break;
-        
-      case 'FavoritesDemo.sp_ClearAllFavorites':
-        if (parameters.userId) request.input('UserId', sql.Int, parameters.userId);
-        break;
-        
-      case 'FavoritesDemo.sp_IsFavorite':
-        if (parameters.userId) request.input('UserId', sql.Int, parameters.userId);
-        if (parameters.url) request.input('Url', sql.NVarChar(500), parameters.url);
-        break;
-        
-      case 'FavoritesDemo.sp_GetFavoritesCount':
-        if (parameters.userId) request.input('UserId', sql.Int, parameters.userId);
-        break;
-    }
-    
-    const result = await request.execute(procedureName);
-    return result.recordset;
-    
-  } catch (error) {
-    console.error(`Error executing ${procedureName}:`, error.message);
-    throw error;
-  }
-}
-
-// =============================================================================
-// API ENDPOINTS
-// =============================================================================
-
-/**
- * Test database connection
- */
-app.post('/api/test-connection', async (req, res) => {
-  try {
-  await ensureDbConnected();
-    
-    res.json({ success: true, message: 'Database connected successfully' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Execute any stored procedure
- */
-app.post('/api/execute-procedure', async (req, res) => {
-  try {
-    const { procedure, parameters } = req.body;
-    
-  await ensureDbConnected();
-    
-    const results = await executeStoredProcedure(procedure, parameters);
-    res.json(results);
-    
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Get all resources
- */
-app.get('/api/resources', async (req, res) => {
-  try {
-  await ensureDbConnected();
-    const userId = parseInt(req.query.userId) || 1;
-    const results = await executeStoredProcedure('FavoritesDemo.sp_GetAllResources', { userId });
-    res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Get frequently visited
- */
-app.get('/api/frequently-visited', async (req, res) => {
-  try {
-  await ensureDbConnected();
-    const userId = parseInt(req.query.userId) || 1;
-    const topCount = parseInt(req.query.topCount) || 10;
-    const results = await executeStoredProcedure('FavoritesDemo.sp_GetFrequentlyVisited', { userId, topCount });
-    res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Get user favorites
- */
-app.get('/api/favorites', async (req, res) => {
-  try {
-  await ensureDbConnected();
-    const userId = parseInt(req.query.userId) || 1;
-    const results = await executeStoredProcedure('FavoritesDemo.sp_GetUserFavorites', { userId });
-    res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Add favorite
- */
-app.post('/api/favorites', async (req, res) => {
-  try {
-    const { url, displayName, userNotes } = req.body || {};
-    const userId = req.body && req.body.userId ? parseInt(req.body.userId) : 1;
-    if (!url || typeof url !== 'string' || !url.trim()) {
-      return res.status(400).json({ error: 'URL is required' });
-    }
-    await ensureDbConnected();
-    const results = await executeStoredProcedure('FavoritesDemo.sp_AddFavorite', { 
-      userId, url, displayName, userNotes 
-    });
-    res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Remove favorite
- */
-app.delete('/api/favorites', async (req, res) => {
-  try {
-    const { url } = req.body || {};
-    const userId = req.body && req.body.userId ? parseInt(req.body.userId) : 1;
-    if (!url || typeof url !== 'string' || !url.trim()) {
-      return res.status(400).json({ error: 'URL is required' });
-    }
-    await ensureDbConnected();
-    const results = await executeStoredProcedure('FavoritesDemo.sp_RemoveFavorite', { userId, url });
-    res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Clear all favorites
- */
-app.delete('/api/favorites/all', async (req, res) => {
-  try {
-  const userId = req.body && req.body.userId ? parseInt(req.body.userId) : 1;
-  await ensureDbConnected();
-    const results = await executeStoredProcedure('FavoritesDemo.sp_ClearAllFavorites', { userId });
-    res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Serve the main application
- */
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'index.html'));
+// Fallback to EJS index for non-API routes (Express 5-safe)
+app.use((req, res, next) => {
+  if (req.path && req.path.startsWith('/api/')) return next();
+  // Only handle GET-like navigations; let others fall through
+  if (req.method !== 'GET') return next();
+  return res.render('index', { title: 'Favorites Store Demo' });
 });
 
 /**
@@ -326,10 +104,8 @@ async function startServer() {
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down server...');
-  if (pool) {
-    await pool.close();
-    console.log('📝 Database connection closed');
-  }
+  await closeDatabase();
+  console.log('📝 Database connection closed');
   process.exit(0);
 });
 

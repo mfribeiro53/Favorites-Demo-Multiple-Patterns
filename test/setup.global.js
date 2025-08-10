@@ -1,9 +1,13 @@
+// Global Mocha root hooks
+// Purpose: Start the API server once before all tests, verify DB readiness via /api/test-connection,
+// and gracefully tear it down after the suite.
 import { spawn } from 'node:child_process';
 import http from 'http';
 
 const API_PORT = 3001;
 let apiProc;
 
+// Wait until the API process prints its ready log line
 async function waitForLog(proc, match, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('timeout waiting for log')), timeoutMs);
@@ -19,6 +23,7 @@ async function waitForLog(proc, match, timeoutMs = 5000) {
   });
 }
 
+// Minimal JSON POST helper to ping /api/test-connection
 async function httpPost(url, body) {
   return new Promise((resolve, reject) => {
     const req = http.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
@@ -32,6 +37,7 @@ async function httpPost(url, body) {
   });
 }
 
+// Poll /api/test-connection until the API and DB are reported ready
 async function waitForApiReady(timeoutMs = 15000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {

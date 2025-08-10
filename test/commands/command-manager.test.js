@@ -1,6 +1,9 @@
+// CommandManager unit tests
+// Purpose: Ensure execute/undo/redo semantics, redo clearing on new branches, history inspection, and error resilience.
 import { expect } from 'chai';
 import { createCommandManager } from '../../src/commands/command-manager.js';
 
+// Test helper: returns an action that mutates a simple counter
 function makeAction(counter, delta = 1) {
   return {
     type: 'COUNTER_DELTA',
@@ -21,6 +24,7 @@ function makeAction(counter, delta = 1) {
 
 describe('CommandManager', () => {
   it('executes, undoes, and redoes actions', async () => {
+    // Happy path workflow: execute -> undo -> redo updates both state and flags
     const mgr = createCommandManager();
     const counter = { value: 0 };
 
@@ -40,6 +44,7 @@ describe('CommandManager', () => {
   });
 
   it('clears redo history when a new action is executed after undo', async () => {
+    // After undo, executing a new action should clear the redo stack (new timeline)
     const mgr = createCommandManager();
     const c = { value: 0 };
 
@@ -59,6 +64,7 @@ describe('CommandManager', () => {
   });
 
   it('getHistory and clearHistory behave correctly', async () => {
+    // History snapshot provides counts and currentIndex; clearHistory resets manager
     const mgr = createCommandManager();
     const c = { value: 0 };
 
@@ -76,6 +82,7 @@ describe('CommandManager', () => {
   });
 
   it('does not advance history if execute throws', async () => {
+    // Robustness: a failing execute should not push onto history or change flags
     const mgr = createCommandManager();
     const bad = {
       type: 'BAD',
