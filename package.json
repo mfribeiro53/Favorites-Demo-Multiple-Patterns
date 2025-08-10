@@ -7,7 +7,9 @@
   "scripts": {
   "start": "npx http-server . -p 3000 -o",
   "dev": "npx http-server . -p 3000 -o -c-1",
-  "test": "node test/test-favorites-store.js && node test/test-utils.js",
+  "test": "mocha --require test/setup.global.js \"test/**/*.test.js\"",
+  "test:unit": "mocha --require test/setup.global.js \"test/**/*.test.js\" --exclude \"test/integration/**\"",
+  "test:integration": "mocha --require test/setup.global.js \"test/integration/**/*.test.js\"",
     "serve": "python3 -m http.server 8080",
     "title-server": "node server/title-proxy.js",
   "dev-with-titles": "npm run serve & npm run title-server",
@@ -26,7 +28,9 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "http-server": "^14.1.1"
+  "http-server": "^14.1.1",
+  "chai": "^5.1.1",
+  "mocha": "^10.7.3"
   },
   "dependencies": {
     "cors": "^2.8.5",

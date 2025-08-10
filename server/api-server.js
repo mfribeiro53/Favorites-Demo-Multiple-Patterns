@@ -68,6 +68,15 @@ async function initializeDatabase() {
   }
 }
 
+async function ensureDbConnected() {
+  if (!pool) {
+    const connected = await initializeDatabase();
+    if (!connected) {
+      throw new Error('Database not connected');
+    }
+  }
+}
+
 /**
  * Execute a stored procedure
  * @param {string} procedureName - Name of the stored procedure
@@ -137,12 +146,7 @@ async function executeStoredProcedure(procedureName, parameters = {}) {
  */
 app.post('/api/test-connection', async (req, res) => {
   try {
-    if (!pool) {
-      const connected = await initializeDatabase();
-      if (!connected) {
-        return res.status(500).json({ error: 'Database connection failed' });
-      }
-    }
+  await ensureDbConnected();
     
     res.json({ success: true, message: 'Database connected successfully' });
   } catch (error) {
@@ -157,9 +161,7 @@ app.post('/api/execute-procedure', async (req, res) => {
   try {
     const { procedure, parameters } = req.body;
     
-    if (!pool) {
-      return res.status(500).json({ error: 'Database not connected' });
-    }
+  await ensureDbConnected();
     
     const results = await executeStoredProcedure(procedure, parameters);
     res.json(results);
@@ -174,6 +176,7 @@ app.post('/api/execute-procedure', async (req, res) => {
  */
 app.get('/api/resources', async (req, res) => {
   try {
+  await ensureDbConnected();
     const userId = parseInt(req.query.userId) || 1;
     const results = await executeStoredProcedure('FavoritesDemo.sp_GetAllResources', { userId });
     res.json(results);
@@ -187,6 +190,7 @@ app.get('/api/resources', async (req, res) => {
  */
 app.get('/api/frequently-visited', async (req, res) => {
   try {
+  await ensureDbConnected();
     const userId = parseInt(req.query.userId) || 1;
     const topCount = parseInt(req.query.topCount) || 10;
     const results = await executeStoredProcedure('FavoritesDemo.sp_GetFrequentlyVisited', { userId, topCount });
@@ -201,6 +205,7 @@ app.get('/api/frequently-visited', async (req, res) => {
  */
 app.get('/api/favorites', async (req, res) => {
   try {
+  await ensureDbConnected();
     const userId = parseInt(req.query.userId) || 1;
     const results = await executeStoredProcedure('FavoritesDemo.sp_GetUserFavorites', { userId });
     res.json(results);
@@ -214,7 +219,12 @@ app.get('/api/favorites', async (req, res) => {
  */
 app.post('/api/favorites', async (req, res) => {
   try {
-    const { url, displayName, userNotes, userId = 1 } = req.body;
+    const { url, displayName, userNotes } = req.body || {};
+    const userId = req.body && req.body.userId ? parseInt(req.body.userId) : 1;
+    if (!url || typeof url !== 'string' || !url.trim()) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+    await ensureDbConnected();
     const results = await executeStoredProcedure('FavoritesDemo.sp_AddFavorite', { 
       userId, url, displayName, userNotes 
     });
@@ -229,7 +239,12 @@ app.post('/api/favorites', async (req, res) => {
  */
 app.delete('/api/favorites', async (req, res) => {
   try {
-    const { url, userId = 1 } = req.body;
+    const { url } = req.body || {};
+    const userId = req.body && req.body.userId ? parseInt(req.body.userId) : 1;
+    if (!url || typeof url !== 'string' || !url.trim()) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+    await ensureDbConnected();
     const results = await executeStoredProcedure('FavoritesDemo.sp_RemoveFavorite', { userId, url });
     res.json(results);
   } catch (error) {
@@ -242,7 +257,8 @@ app.delete('/api/favorites', async (req, res) => {
  */
 app.delete('/api/favorites/all', async (req, res) => {
   try {
-    const userId = parseInt(req.body.userId) || 1;
+  const userId = req.body && req.body.userId ? parseInt(req.body.userId) : 1;
+  await ensureDbConnected();
     const results = await executeStoredProcedure('FavoritesDemo.sp_ClearAllFavorites', { userId });
     res.json(results);
   } catch (error) {
